@@ -11,6 +11,80 @@ TencentDB Agent Memory 的核心设计不是把历史对话切片后丢进一个
 
 长期记忆强调跨 session 的偏好、事实、指令和场景沉淀；短期任务记忆强调长任务中的工具结果压缩、任务状态恢复和 token 控制。
 
+## 架构图
+
+![alt text](image.png)
+
+```mermaid
+flowchart TB
+  Host["Host Runtime"]
+  Core["TdaiCore"]
+  Adapter["HostAdapter"]
+
+  Host --> Core
+  Adapter --> Core
+
+  subgraph LongTerm[长期个性化记忆]
+    Capture["auto-capture"]
+    L0["L0 Conversation"]
+    L1["L1 Atom"]
+    L2["L2 Scenario"]
+    L3["L3 Persona"]
+    Pipeline["MemoryPipelineManager"]
+
+    Capture --> L0
+    Capture --> Pipeline
+    Pipeline --> L1
+    L1 --> L2
+    L2 --> L3
+  end
+
+  subgraph Stores[存储与索引]
+    Jsonl["Append-only JSONL"]
+    VectorStore["IMemoryStore"]
+    Embedding["EmbeddingService"]
+    Metadata["metadata files"]
+  end
+
+  L0 --> Jsonl
+  L1 --> Jsonl
+  L0 --> VectorStore
+  L1 --> VectorStore
+  Embedding --> VectorStore
+  Pipeline --> Metadata
+  L2 --> Metadata
+
+  subgraph Recall[召回与注入]
+    AutoRecall["auto-recall"]
+    DynamicCtx["prependContext"]
+    StableCtx["appendSystemContext"]
+    Tools["Agent tools"]
+  end
+
+  VectorStore --> AutoRecall
+  L2 --> AutoRecall
+  L3 --> AutoRecall
+  AutoRecall --> DynamicCtx
+  AutoRecall --> StableCtx
+  AutoRecall --> Tools
+  DynamicCtx --> Host
+  StableCtx --> Host
+
+  subgraph Offload[短期 Context Offload]
+    ToolHook["after_tool_call"]
+    Refs["refs md files"]
+    OffloadJsonl["offload jsonl"]
+    Mmd["Mermaid task canvas"]
+    Compress["L3 compression"]
+
+    ToolHook --> Refs
+    ToolHook --> OffloadJsonl
+    OffloadJsonl --> Mmd
+    Mmd --> Compress
+    Compress --> Host
+  end
+```
+
 ## 长期记忆分层
 
 ### L0 Conversation：原始对话层
@@ -118,6 +192,55 @@ PersonaGenerator 会优先读取自上次 persona 生成后变化过的场景，
 统一入口是 `src/core/tdai-core.ts`。它通过 `HostAdapter` 和 `LLMRunnerFactory` 抽象宿主环境，使核心记忆逻辑可以运行在 OpenClaw、Hermes、Gateway 或 CLI 中。
 
 一次典型交互链路如下：
+
+```mermaid
+sequenceDiagram
+  participant User as User
+  participant Host as Host Runtime
+  participant Core as TdaiCore
+  participant Recall as AutoRecall
+  participant Capture as AutoCapture
+  participant Store as Store
+  participant Pipe as Pipeline
+  participant LLM as Memory LLM
+  participant Files as Memory Files
+
+  User->>Host: Send message
+  Host->>Core: handleBeforeRecall(userText, sessionKey)
+  Core->>Recall: performAutoRecall()
+  Recall->>Store: Search L1 by keyword / embedding / hybrid
+  Recall->>Files: Read persona.md and scene navigation
+  Recall-->>Core: prependContext + appendSystemContext
+  Core-->>Host: Inject memory context
+  Host-->>User: Agent response
+
+  Host->>Core: handleTurnCommitted(turn)
+  Core->>Capture: performAutoCapture()
+  Capture->>Store: Write L0 JSONL and L0 index
+  Capture->>Pipe: notifyConversation(sessionKey)
+
+  alt L1 threshold / idle timeout / flush reached
+    Pipe->>Store: Read new L0 by checkpoint cursor
+    Pipe->>LLM: Extract L1 atoms
+    LLM-->>Pipe: scene-segmented memories
+    Pipe->>Store: Dedup and write L1 JSONL + index
+    Pipe->>Pipe: Mark L1 checkpoint
+  end
+
+  alt L2 timer fires for active session
+    Pipe->>Store: Query new L1 records
+    Pipe->>LLM: Update scene blocks
+    LLM->>Files: Create / update / merge Markdown scenes
+    Pipe->>Files: Sync scene index and navigation
+  end
+
+  alt Persona trigger satisfied
+    Pipe->>Files: Read changed scenes
+    Pipe->>LLM: Generate or update persona
+    LLM->>Files: Write persona.md
+    Pipe->>Store: Optional profile sync
+  end
+```
 
 1. 对话结束后，宿主调用 `handleTurnCommitted()`。
 2. `performAutoCapture()` 写入 L0 JSONL，并写入 L0 检索索引。
