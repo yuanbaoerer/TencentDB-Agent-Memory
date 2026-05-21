@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-ha-style="architectural-spread">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TencentDB Agent Memory · 四层记忆系统设计</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --c-taupe: #6B655F;
+      --c-taupe-dark: #4A453F;
+      --c-cream: #EBE8E3;
+      --c-cream-deep: #DDD8D2;
+      --c-moss: #2A3826;
+      --c-black: #111111;
+      --c-white: #FFFFFF;
+      --c-ink-muted: #444444;
+      --c-rule: rgba(17, 17, 17, 0.22);
+      --c-accent: #a03b00;
+      --c-l3: #4a7c59;
+      --c-l2: #7b6b8a;
+      --c-l1: #5a6e8a;
+      --c-l0: #8a6b5a;
+
+      --font-sans: 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --font-serif: 'Noto Serif SC', 'Times New Roman', Times, serif;
+
+      --spacing-unit: 2rem;
+      --page-padding: clamp(1.4rem, 4vw, 3rem);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--c-cream);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .architectural-viewport {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .col-visual {
+      background: var(--c-taupe);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: var(--page-padding);
+      overflow: hidden;
+    }
+
+    .col-content {
+      background: var(--c-cream);
+      display: flex;
+      flex-direction: column;
+      padding: var(--page-padding);
+      overflow: hidden;
+    }
+
+    .visual-object {
+      width: clamp(180px, 35vw, 320px);
+      height: clamp(180px, 35vw, 320px);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .visual-object svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .visual-inset {
+      position: absolute;
+      bottom: var(--page-padding);
+      left: var(--page-padding);
+      width: clamp(80px, 15vw, 140px);
+      height: clamp(60px, 12vw, 100px);
+      background: var(--c-taupe-dark);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--c-cream);
+      opacity: 0.7;
+    }
+
+    .header-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--c-ink-muted);
+      margin-bottom: var(--space-lg);
+    }
+
+    .headline {
+      font-family: var(--font-sans);
+      font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+      font-weight: 300;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--c-black);
+      margin-bottom: var(--space-xl);
+    }
+
+    .headline-serif {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .body-text {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--c-ink-muted);
+      max-width: 340px;
+    }
+
+    .body-text p {
+      margin-bottom: var(--space-lg);
+    }
+
+    .body-text code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--c-cream-deep);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .nav-anchor {
+      position: absolute;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--c-ink-muted);
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+
+    .nav-anchor:hover {
+      opacity: 1;
+    }
+
+    .nav-close {
+      top: var(--page-padding);
+      right: var(--page-padding);
+    }
+
+    .nav-more {
+      bottom: var(--page-padding);
+      right: var(--page-padding);
+    }
+
+    .nav-prev {
+      bottom: var(--page-padding);
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .pagination {
+      position: absolute;
+      bottom: var(--page-padding);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--c-rule);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .dot.active {
+      background: var(--c-accent);
+      transform: scale(1.3);
+    }
+
+    .dot:hover {
+      background: var(--c-ink-muted);
+    }
+
+    .chapter-indicator {
+      font-size: 11px;
+      color: var(--c-ink-muted);
+      opacity: 0.5;
+      margin-top: auto;
+      padding-top: var(--space-xl);
+    }
+
+    .layer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: var(--space-md);
+    }
+
+    .layer-badge.l0 { background: var(--c-l0); color: var(--c-white); }
+    .layer-badge.l1 { background: var(--c-l1); color: var(--c-white); }
+    .layer-badge.l2 { background: var(--c-l2); color: var(--c-white); }
+    .layer-badge.l3 { background: var(--c-l3); color: var(--c-white); }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-md);
+      margin-top: var(--space-xl);
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: var(--space-lg);
+      background: var(--c-cream-deep);
+      border-radius: 6px;
+    }
+
+    .stat-value {
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--c-accent);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--c-ink-muted);
+      margin-top: 4px;
+    }
+
+    .flow-diagram {
+      width: 100%;
+      max-width: 280px;
+      margin-top: var(--space-xl);
+    }
+
+    .flow-diagram svg {
+      width: 100%;
+      height: auto;
+    }
+
+    .memory-chain {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      margin-top: var(--space-xl);
+    }
+
+    .memory-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-md);
+      padding: var(--space-md);
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      font-size: 12px;
+      color: var(--c-cream);
+    }
+
+    .memory-item .num {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .memory-item.l0 .num { background: var(--c-l0); }
+    .memory-item.l1 .num { background: var(--c-l1); }
+    .memory-item.l2 .num { background: var(--c-l2); }
+    .memory-item.l3 .num { background: var(--c-l3); }
+
+    .mermaid-preview {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--c-cream);
+      background: var(--c-taupe-dark);
+      padding: var(--space-md);
+      border-radius: 4px;
+      white-space: pre;
+      line-height: 1.4;
+      opacity: 0.8;
+    }
+
+    .concept-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-md);
+      margin-top: var(--space-lg);
+    }
+
+    .concept-item {
+      padding: var(--space-md);
+      background: var(--c-cream-deep);
+      border-radius: 6px;
+    }
+
+    .concept-item h4 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--c-black);
+      margin-bottom: 4px;
+    }
+
+    .concept-item p {
+      font-size: 11px;
+      color: var(--c-ink-muted);
+      line-height: 1.5;
+    }
+
+    .highlight-box {
+      background: var(--c-cream-deep);
+      border-left: 3px solid var(--c-accent);
+      padding: var(--space-md) var(--space-lg);
+      margin-top: var(--space-lg);
+      font-size: 12px;
+      color: var(--c-ink-muted);
+    }
+
+    .layer-tree {
+      margin-top: var(--space-lg);
+    }
+
+    .layer-node {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-md);
+      margin-bottom: var(--space-md);
+    }
+
+    .layer-tag {
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--c-white);
+      min-width: 32px;
+      text-align: center;
+    }
+
+    .layer-tag.l0 { background: var(--c-l0); }
+    .layer-tag.l1 { background: var(--c-l1); }
+    .layer-tag.l2 { background: var(--c-l2); }
+    .layer-tag.l3 { background: var(--c-l3); }
+
+    .layer-content {
+      font-size: 12px;
+      color: var(--c-ink-muted);
+      line-height: 1.5;
+    }
+
+    .layer-content strong {
+      color: var(--c-black);
+      font-weight: 500;
+    }
+
+    .scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: var(--space-md);
+    }
+
+    .scroll-content::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .scroll-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .scroll-content::-webkit-scrollbar-thumb {
+      background: var(--c-rule);
+      border-radius: 2px;
+    }
+
+    .storage-diagram {
+      width: 100%;
+      max-width: 260px;
+      margin-top: var(--space-lg);
+    }
+
+    @media (max-width: 768px) {
+      .architectural-viewport {
+        grid-template-columns: 1fr;
+        grid-template-rows: 40vh 1fr;
+        height: auto;
+        overflow-y: auto;
+      }
+
+      body {
+        height: auto;
+        overflow: auto;
+      }
+
+      .col-visual {
+        padding: var(--space-xl);
+      }
+
+      .col-content {
+        padding: var(--space-xl) var(--page-padding);
+        max-height: none;
+      }
+
+      .visual-inset {
+        display: none;
+      }
+
+      .nav-anchor {
+        display: none;
+      }
+
+      .scroll-content {
+        overflow: visible;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="architectural-viewport" id="viewport">
+
+  <!-- Left Visual Bay -->
+  <div class="col-visual">
+    <div class="visual-object" id="visual-object">
+      <!-- Dynamic SVG based on chapter -->
+    </div>
+    <div class="visual-inset" id="visual-inset">
+      Memory Layers
+    </div>
+    <span class="nav-anchor nav-close" onclick="window.close()">Close ( × )</span>
+    <span class="nav-anchor nav-prev" id="nav-prev" onclick="prevChapter()">← Prev</span>
+  </div>
+
+  <!-- Right Editorial Panel -->
+  <div class="col-content">
+    <div class="scroll-content" id="scroll-content">
+      <div class="header-label" id="header-label">Overview</div>
+      <h1 class="headline" id="headline">
+        四层记忆系统<br><span class="headline-serif">分层抽象设计</span>
+      </h1>
+      <div class="body-text" id="body-text">
+        <!-- Dynamic content -->
+      </div>
+      <div class="chapter-indicator" id="chapter-indicator">
+        Chapter 1 of 5
+      </div>
+    </div>
+    <div class="pagination" id="pagination">
+      <!-- Dynamic dots -->
+    </div>
+  </div>
+
+</div>
+
+<script>
+const chapters = [
+  {
+    label: "Design Overview",
+    headline: "四层记忆系统<br><span class='headline-serif'>分层抽象设计</span>",
+    body: `
+      <p>核心设计不是把历史对话切片后丢进扁平向量库，而是把记忆拆成两条互补链路：</p>
+      <div class="layer-tree">
+        <div class="layer-node">
+          <span class="layer-tag l3">L3</span>
+          <div class="layer-content"><strong>长期个性化记忆：</strong>对话 → 原子 → 场景 → 画像</div>
+        </div>
+        <div class="layer-node">
+          <span class="layer-tag l0">L0</span>
+          <div class="layer-content"><strong>短期任务记忆：</strong>工具日志 offload → 摘要 JSONL → Mermaid 任务图</div>
+        </div>
+      </div>
+      <div class="highlight-box">
+        目标：让 Agent 既能保留可追溯证据，又能在上下文里看到高密度、可操作的结构化信息。
+      </div>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <div class="stat-value">-61%</div>
+          <div class="stat-label">Token 消耗降低</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">+51%</div>
+          <div class="stat-label">任务通过率提升</div>
+        </div>
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <defs>
+          <radialGradient id="grad1" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" style="stop-color:#8a6b5a;stop-opacity:0.8" />
+            <stop offset="100%" style="stop-color:#6B655F;stop-opacity:1" />
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="90" fill="url(#grad1)" />
+        <circle cx="100" cy="100" r="70" fill="none" stroke="#EBE8E3" stroke-width="1" opacity="0.3" />
+        <circle cx="100" cy="100" r="50" fill="none" stroke="#EBE8E3" stroke-width="1" opacity="0.3" />
+        <circle cx="100" cy="100" r="30" fill="none" stroke="#EBE8E3" stroke-width="1" opacity="0.3" />
+        <text x="100" y="100" text-anchor="middle" dominant-baseline="middle" fill="#EBE8E3" font-size="8" font-weight="600">L0-L1-L2-L3</text>
+      </svg>
+    `,
+    inset: "长期记忆系统"
+  },
+  {
+    label: "Memory Layers",
+    headline: "记忆分层架构<br><span class='headline-serif'>渐进式抽象</span>",
+    body: `
+      <p>类比人类记忆：L0 像"录像带"完整但无法全部回忆，L3 像"刻板印象"最精炼但可能失真。</p>
+      <div class="memory-chain">
+        <div class="memory-item l0">
+          <span class="num">L0</span>
+          <span>原始对话层 — 不可篡改的证据，append-only JSONL</span>
+        </div>
+        <div class="memory-item l1">
+          <span class="num">L1</span>
+          <span>原子结构化层 — LLM 提取 persona/episodic/instruction</span>
+        </div>
+        <div class="memory-item l2">
+          <span class="num">L2</span>
+          <span>场景聚合层 — 主题化的记忆块，Markdown 场景文件</span>
+        </div>
+        <div class="memory-item l3">
+          <span class="num">L3</span>
+          <span>用户画像层 — 最高层次抽象，persona.md</span>
+        </div>
+      </div>
+      <div class="highlight-box">
+        通过 <code>result_ref</code> 链接实现层级追溯：L3 → L2 → L1 → L0
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="30" y="30" width="140" height="40" rx="4" fill="#8a6b5a" opacity="0.7"/>
+        <rect x="30" y="80" width="140" height="35" rx="4" fill="#5a6e8a" opacity="0.7"/>
+        <rect x="30" y="125" width="140" height="30" rx="4" fill="#7b6b8a" opacity="0.7"/>
+        <rect x="30" y="162" width="140" height="25" rx="4" fill="#4a7c59" opacity="0.7"/>
+        <text x="100" y="50" text-anchor="middle" fill="#EBE8E3" font-size="9" font-weight="500">L0: Conversation</text>
+        <text x="100" y="97" text-anchor="middle" fill="#EBE8E3" font-size="9" font-weight="500">L1: Atom</text>
+        <text x="100" y="140" text-anchor="middle" fill="#EBE8E3" font-size="9" font-weight="500">L2: Scenario</text>
+        <text x="100" y="174" text-anchor="middle" fill="#EBE8E3" font-size="9" font-weight="500">L3: Persona</text>
+        <path d="M 20 100 L 30 55" stroke="#EBE8E3" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M 20 100 L 30 97" stroke="#EBE8E3" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M 20 100 L 30 140" stroke="#EBE8E3" stroke-width="1" fill="none" opacity="0.5"/>
+        <path d="M 20 100 L 30 174" stroke="#EBE8E3" stroke-width="1" fill="none" opacity="0.5"/>
+      </svg>
+    `,
+    inset: "L0 → L3 分层"
+  },
+  {
+    label: "Pipeline Scheduling",
+    headline: "Pipeline 调度<br><span class='headline-serif'>智能触发策略</span>",
+    body: `
+      <p>不同层级采用不同的定时器策略，时效性要求各不相同：</p>
+      <div class="concept-grid">
+        <div class="concept-item">
+          <h4>L1: 可重置防抖</h4>
+          <p>用户持续对话时重置倒计时，只有空闲 N 秒后才触发提取。</p>
+        </div>
+        <div class="concept-item">
+          <h4>L2: 只早定时器</h4>
+          <p>只能提前不能推迟，保证至少每 N 分钟执行一次。</p>
+        </div>
+        <div class="concept-item">
+          <h4>L3: 全局互斥队列</h4>
+          <p>串行处理避免文件并发写入损坏。</p>
+        </div>
+        <div class="concept-item">
+          <h4>Warm-up 机制</h4>
+          <p>新 session 阈值 1→2→4→8 逐步增长，快速建立记忆。</p>
+        </div>
+      </div>
+      <div class="highlight-box">
+        核心思想：capture 阶段只负责可靠记录，是否做 L1/L2/L3 由调度器决定。
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="20" y="20" width="160" height="30" rx="4" fill="#5a6e8a"/>
+        <rect x="20" y="60" width="160" height="25" rx="4" fill="#7b6b8a"/>
+        <rect x="20" y="95" width="160" height="20" rx="4" fill="#4a7c59"/>
+        <text x="100" y="40" text-anchor="middle" fill="#EBE8E3" font-size="8">L1: 防抖定时器</text>
+        <text x="100" y="78" text-anchor="middle" fill="#EBE8E3" font-size="8">L2: 只早定时器</text>
+        <text x="100" y="110" text-anchor="middle" fill="#EBE8E3" font-size="8">L3: 串行队列</text>
+        <path d="M 100 115 L 100 160" stroke="#EBE8E3" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+        <defs>
+          <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="#EBE8E3"/>
+          </marker>
+        </defs>
+        <text x="100" y="175" text-anchor="middle" fill="#EBE8E3" font-size="7" opacity="0.7">Pipeline Manager</text>
+      </svg>
+    `,
+    inset: "调度逻辑"
+  },
+  {
+    label: "Recall & Injection",
+    headline: "双通道召回<br><span class='headline-serif'>分层注入机制</span>",
+    body: `
+      <p>召回上下文被拆成两类，利用 Prompt Cache 优化推理效率：</p>
+      <div class="concept-grid">
+        <div class="concept-item">
+          <h4>appendSystemContext</h4>
+          <p>静态信息 → system prompt 后。可缓存，LLM 推理高效。</p>
+        </div>
+        <div class="concept-item">
+          <h4>prependContext</h4>
+          <p>动态信息 → 用户消息前。每轮灵活变化。</p>
+        </div>
+      </div>
+      <p style="margin-top: var(--space-lg); font-size: 12px; color: var(--c-ink-muted);">
+        三种召回策略融合：
+      </p>
+      <div style="font-size: 11px; color: var(--c-ink-muted); margin-top: var(--space-sm);">
+        • <code>keyword</code> — FTS5 BM25 精确匹配<br>
+        • <code>embedding</code> — 向量相似度语义检索<br>
+        • <code>hybrid</code> — RRF 融合排名
+      </div>
+      <div class="highlight-box">
+        Progressive Disclosure：先给高层结构和少量相关片段，不够时再向下钻取证据。
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="40" y="20" width="120" height="25" rx="3" fill="#DDD8D2"/>
+        <text x="100" y="37" text-anchor="middle" fill="#444" font-size="8">System Prompt</text>
+        <rect x="40" y="50" width="120" height="20" rx="3" fill="#DDD8D2" opacity="0.7"/>
+        <text x="100" y="64" text-anchor="middle" fill="#444" font-size="7">L2 Scene + L3 Persona</text>
+        <rect x="40" y="80" width="120" height="20" rx="3" fill="#DDD8D2" opacity="0.5"/>
+        <text x="100" y="94" text-anchor="middle" fill="#444" font-size="7">L1 Static Memory</text>
+        <line x1="20" y1="90" x2="40" y2="90" stroke="#a03b00" stroke-width="2"/>
+        <rect x="20" y="105" width="160" height="18" rx="3" fill="#a03b00" opacity="0.8"/>
+        <text x="100" y="118" text-anchor="middle" fill="#fff" font-size="7">User Message</text>
+        <line x1="20" y1="111" x2="20" y2="90" stroke="#a03b00" stroke-width="2"/>
+        <rect x="20" y="130" width="160" height="20" rx="3" fill="#6B655F"/>
+        <text x="100" y="144" text-anchor="middle" fill="#fff" font-size="7">L1 Dynamic Memory</text>
+        <line x1="20" y1="140" x2="20" y2="118" stroke="#6B655F" stroke-width="2"/>
+        <text x="100" y="185" text-anchor="middle" fill="#444" font-size="6">Cache Zone / Dynamic Zone</text>
+      </svg>
+    `,
+    inset: "召回注入"
+  },
+  {
+    label: "Storage & Integration",
+    headline: "存储与集成<br><span class='headline-serif'>双轨后端设计</span>",
+    body: `
+      <p>存储抽象采用 capability-based 设计，上层代码不直接依赖具体后端：</p>
+      <div class="concept-grid">
+        <div class="concept-item">
+          <h4>SQLite + sqlite-vec</h4>
+          <p>本地零配置，隐私优先。适合开发和小规模部署。</p>
+        </div>
+        <div class="concept-item">
+          <h4>TCVDB 云端</h4>
+          <p>原生 Hybrid Search，服务端 Embedding，弹性扩展。</p>
+        </div>
+      </div>
+      <div style="margin-top: var(--space-lg); padding: var(--space-md); background: var(--c-cream-deep); border-radius: 4px; font-size: 11px;">
+        <strong style="color: var(--c-black);">数据目录结构：</strong>
+        <div style="margin-top: 8px; font-family: var(--font-mono); color: var(--c-ink-muted);">
+          ~/.openclaw/memory-tdai/<br>
+          ├── L0/ conversations JSONL<br>
+          ├── L1/ records JSONL<br>
+          ├── L2/ scene_blocks/*.md<br>
+          └── L3/ persona.md
+        </div>
+      </div>
+      <div class="highlight-box">
+        HostAdapter 模式：核心逻辑与宿主解耦，支持 OpenClaw、Hermes、Gateway 多端部署。
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="60" y="15" width="80" height="25" rx="4" fill="#4a7c59"/>
+        <text x="100" y="32" text-anchor="middle" fill="#fff" font-size="8">TdaiCore</text>
+        <rect x="20" y="55" width="70" height="35" rx="4" fill="#5a6e8a" opacity="0.8"/>
+        <rect x="110" y="55" width="70" height="35" rx="4" fill="#7b6b8a" opacity="0.8"/>
+        <text x="55" y="72" text-anchor="middle" fill="#fff" font-size="7">OpenClaw</text>
+        <text x="145" y="72" text-anchor="middle" fill="#fff" font-size="7">Hermes</text>
+        <rect x="20" y="105" width="160" height="25" rx="4" fill="#8a6b5a" opacity="0.8"/>
+        <text x="100" y="121" text-anchor="middle" fill="#fff" font-size="7">HostAdapter</text>
+        <rect x="30" y="145" width="65" height="20" rx="3" fill="#DDD8D2"/>
+        <rect x="105" y="145" width="65" height="20" rx="3" fill="#DDD8D2"/>
+        <text x="62" y="159" text-anchor="middle" fill="#444" font-size="6">SQLite</text>
+        <text x="137" y="159" text-anchor="middle" fill="#444" font-size="6">TCVDB</text>
+        <line x1="100" y1="40" x2="55" y2="55" stroke="#EBE8E3" stroke-width="1"/>
+        <line x1="100" y1="40" x2="145" y2="55" stroke="#EBE8E3" stroke-width="1"/>
+        <line x1="55" y1="90" x2="62" y2="145" stroke="#EBE8E3" stroke-width="1"/>
+        <line x1="145" y1="90" x2="137" y2="145" stroke="#EBE8E3" stroke-width="1"/>
+      </svg>
+    `,
+    inset: "宿主解耦"
+  }
+];
+
+let currentChapter = 0;
+
+function renderChapter(index) {
+  const chapter = chapters[index];
+
+  document.getElementById('header-label').textContent = chapter.label;
+  document.getElementById('headline').innerHTML = chapter.headline;
+  document.getElementById('body-text').innerHTML = chapter.body;
+  document.getElementById('visual-object').innerHTML = chapter.visual;
+  document.getElementById('visual-inset').textContent = chapter.inset;
+  document.getElementById('chapter-indicator').textContent = `Chapter ${index + 1} of ${chapters.length}`;
+
+  // Update pagination dots
+  const pagination = document.getElementById('pagination');
+  pagination.innerHTML = chapters.map((_, i) =>
+    `<span class="dot ${i === index ? 'active' : ''}" onclick="goToChapter(${i})"></span>`
+  ).join('');
+
+  // Update prev button
+  const prevBtn = document.getElementById('nav-prev');
+  prevBtn.textContent = index > 0 ? '← Prev' : '';
+  prevBtn.style.visibility = index > 0 ? 'visible' : 'hidden';
+
+  // Reset scroll
+  document.getElementById('scroll-content').scrollTop = 0;
+}
+
+function goToChapter(index) {
+  currentChapter = index;
+  renderChapter(currentChapter);
+}
+
+function nextChapter() {
+  if (currentChapter < chapters.length - 1) {
+    currentChapter++;
+    renderChapter(currentChapter);
+  }
+}
+
+function prevChapter() {
+  if (currentChapter > 0) {
+    currentChapter--;
+    renderChapter(currentChapter);
+  }
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') {
+    e.preventDefault();
+    nextChapter();
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    prevChapter();
+  }
+});
+
+// Touch swipe support
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => {
+  touchStartX = e.touches[0].clientX;
+});
+
+document.addEventListener('touchend', (e) => {
+  const touchEndX = e.changedTouches[0].clientX;
+  const diff = touchStartX - touchEndX;
+  if (Math.abs(diff) > 50) {
+    if (diff > 0) nextChapter();
+    else prevChapter();
+  }
+});
+
+// Initial render
+renderChapter(0);
+</script>
+
+</body>
+</html>

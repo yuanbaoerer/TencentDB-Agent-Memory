@@ -13,8 +13,6 @@ TencentDB Agent Memory 的核心设计不是把历史对话切片后丢进一个
 
 ## 架构图
 
-![alt text](image.png)
-
 ```mermaid
 flowchart TB
   Host["Host Runtime"]

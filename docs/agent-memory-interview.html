@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-ha-style="architectural-spread">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TencentDB Agent Memory · 面试深度解析</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --c-taupe: #6B655F;
+      --c-taupe-dark: #4A453F;
+      --c-cream: #EBE8E3;
+      --c-cream-deep: #DDD8D2;
+      --c-moss: #2A3826;
+      --c-black: #111111;
+      --c-white: #FFFFFF;
+      --c-ink-muted: #444444;
+      --c-rule: rgba(17, 17, 17, 0.22);
+      --c-accent: #a03b00;
+      --c-l3: #4a7c59;
+      --c-l2: #7b6b8a;
+      --c-l1: #5a6e8a;
+      --c-l0: #8a6b5a;
+      --c-highlight: #c94c00;
+
+      --font-sans: 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      --font-serif: 'Noto Serif SC', 'Times New Roman', Times, serif;
+
+      --spacing-unit: 2rem;
+      --page-padding: clamp(1.4rem, 4vw, 3rem);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--c-cream);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .architectural-viewport {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    .col-visual {
+      background: var(--c-taupe);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      padding: var(--page-padding);
+      overflow: hidden;
+    }
+
+    .col-content {
+      background: var(--c-cream);
+      display: flex;
+      flex-direction: column;
+      padding: var(--page-padding);
+      overflow: hidden;
+    }
+
+    .visual-object {
+      width: clamp(180px, 35vw, 320px);
+      height: clamp(180px, 35vw, 320px);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .visual-object svg { width: 100%; height: 100%; }
+
+    .visual-inset {
+      position: absolute;
+      bottom: var(--page-padding);
+      left: var(--page-padding);
+      width: clamp(80px, 15vw, 140px);
+      height: clamp(60px, 12vw, 100px);
+      background: var(--c-taupe-dark);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--c-cream);
+      opacity: 0.7;
+    }
+
+    .header-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--c-ink-muted);
+      margin-bottom: var(--space-lg);
+    }
+
+    .headline {
+      font-family: var(--font-sans);
+      font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+      font-weight: 300;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      color: var(--c-black);
+      margin-bottom: var(--space-xl);
+    }
+
+    .headline-serif {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 400;
+    }
+
+    .body-text {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--c-ink-muted);
+      max-width: 340px;
+    }
+
+    .body-text p { margin-bottom: var(--space-lg); }
+
+    .body-text code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      background: var(--c-cream-deep);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .nav-anchor {
+      position: absolute;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--c-ink-muted);
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+
+    .nav-anchor:hover { opacity: 1; }
+    .nav-close { top: var(--page-padding); right: var(--page-padding); }
+    .nav-more { bottom: var(--page-padding); right: var(--page-padding); }
+    .nav-prev { bottom: var(--page-padding); left: 50%; transform: translateX(-50%); }
+
+    .pagination {
+      position: absolute;
+      bottom: var(--page-padding);
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--c-rule);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .dot.active { background: var(--c-accent); transform: scale(1.3); }
+    .dot:hover { background: var(--c-ink-muted); }
+
+    .chapter-indicator {
+      font-size: 11px;
+      color: var(--c-ink-muted);
+      opacity: 0.5;
+      margin-top: auto;
+      padding-top: var(--space-xl);
+    }
+
+    .question-tag {
+      display: inline-block;
+      background: var(--c-accent);
+      color: var(--c-white);
+      font-size: 10px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 3px;
+      margin-bottom: var(--space-md);
+    }
+
+    .answer-block {
+      background: var(--c-cream-deep);
+      padding: var(--space-md);
+      border-radius: 6px;
+      margin-top: var(--space-md);
+      border-left: 3px solid var(--c-accent);
+    }
+
+    .answer-block p {
+      font-size: 12px;
+      color: var(--c-ink-muted);
+      margin-bottom: var(--space-sm);
+    }
+
+    .key-insight {
+      background: linear-gradient(135deg, var(--c-accent) 0%, var(--c-highlight) 100%);
+      color: var(--c-white);
+      padding: var(--space-sm) var(--space-md);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: var(--space-md);
+      display: inline-block;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: var(--space-lg);
+      margin-top: var(--space-lg);
+    }
+
+    .stat-box {
+      text-align: center;
+      padding: var(--space-md);
+      background: var(--c-cream-deep);
+      border-radius: 6px;
+      flex: 1;
+    }
+
+    .stat-box .value {
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--c-accent);
+    }
+
+    .stat-box .label {
+      font-size: 10px;
+      color: var(--c-ink-muted);
+      margin-top: 4px;
+    }
+
+    .compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: var(--space-md);
+      font-size: 11px;
+    }
+
+    .compare-table th {
+      background: var(--c-cream-deep);
+      padding: var(--space-sm);
+      text-align: left;
+      font-weight: 600;
+      color: var(--c-black);
+    }
+
+    .compare-table td {
+      padding: var(--space-sm);
+      border-bottom: 1px solid var(--c-rule);
+      color: var(--c-ink-muted);
+    }
+
+    .scroll-content {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: var(--space-md);
+    }
+
+    .scroll-content::-webkit-scrollbar { width: 4px; }
+    .scroll-content::-webkit-scrollbar-track { background: transparent; }
+    .scroll-content::-webkit-scrollbar-thumb { background: var(--c-rule); border-radius: 2px; }
+
+    .flow-chain {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      background: rgba(255,255,255,0.08);
+      border-radius: 4px;
+      font-size: 11px;
+      color: var(--c-cream);
+    }
+
+    .flow-step .arrow {
+      font-size: 14px;
+      opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+      .architectural-viewport {
+        grid-template-columns: 1fr;
+        grid-template-rows: 40vh 1fr;
+        height: auto;
+        overflow-y: auto;
+      }
+
+      body { height: auto; overflow: auto; }
+      .col-visual { padding: var(--space-xl); }
+      .col-content { padding: var(--space-xl) var(--page-padding); max-height: none; }
+      .visual-inset, .nav-anchor { display: none; }
+      .scroll-content { overflow: visible; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="architectural-viewport" id="viewport">
+  <div class="col-visual">
+    <div class="visual-object" id="visual-object"></div>
+    <div class="visual-inset" id="visual-inset">面试要点</div>
+    <span class="nav-anchor nav-close" onclick="window.close()">Close ( × )</span>
+    <span class="nav-anchor nav-prev" id="nav-prev" onclick="prevChapter()">← Prev</span>
+  </div>
+
+  <div class="col-content">
+    <div class="scroll-content" id="scroll-content">
+      <div class="header-label" id="header-label">Q1</div>
+      <h1 class="headline" id="headline">
+        AI 代理的核心问题<br><span class="headline-serif">上下文管理矛盾</span>
+      </h1>
+      <div class="body-text" id="body-text"></div>
+      <div class="chapter-indicator" id="chapter-indicator">Chapter 1 of 6</div>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+
+<script>
+const chapters = [
+  {
+    label: "Q1: 核心问题",
+    headline: "AI 代理的核心问题<br><span class='headline-serif'>上下文管理矛盾</span>",
+    body: `
+      <span class="question-tag">问题背景</span>
+      <p>AI 代理在处理长对话、长任务时面临两个根本矛盾：</p>
+      <table class="compare-table">
+        <tr><th>矛盾</th><th>表现</th><th>后果</th></tr>
+        <tr><td>上下文遗忘</td><td>LLM context window 有限</td><td>早期信息被挤出</td></tr>
+        <tr><td>上下文膨胀</td><td>记忆越多 → token 越多</td><td>成本高、性能下降</td></tr>
+      </table>
+      <div class="stat-row">
+        <div class="stat-box">
+          <div class="value">-61%</div>
+          <div class="label">Token 消耗降低</div>
+        </div>
+        <div class="stat-box">
+          <div class="value">+51%</div>
+          <div class="label">任务通过率提升</div>
+        </div>
+      </div>
+      <div class="key-insight">解决思路：分层记忆 + 符号化压缩 + 按需召回</div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="40" y="20" width="120" height="60" rx="4" fill="#5a6e8a" opacity="0.8"/>
+        <text x="100" y="45" text-anchor="middle" fill="#fff" font-size="9">Context Window</text>
+        <text x="100" y="62" text-anchor="middle" fill="#fff" font-size="7" opacity="0.8">Limited Size</text>
+        <rect x="40" y="95" width="120" height="40" rx="4" fill="#8a6b5a" opacity="0.6"/>
+        <text x="100" y="118" text-anchor="middle" fill="#fff" font-size="8">Old Info Pushed Out</text>
+        <rect x="40" y="150" width="120" height="30" rx="4" fill="#a03b00"/>
+        <text x="100" y="169" text-anchor="middle" fill="#fff" font-size="8">Memory System</text>
+        <path d="M 100 80 L 100 95" stroke="#fff" stroke-width="2" marker-end="url(#arrowhead)"/>
+        <defs>
+          <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <polygon points="0,0 6,3 0,6" fill="#fff"/>
+          </marker>
+        </defs>
+      </svg>
+    `,
+    inset: "上下文矛盾"
+  },
+  {
+    label: "Q2: 传统 RAG 局限",
+    headline: "传统 RAG 的<br><span class="headline-serif">三个根本缺陷</span>",
+    body: `
+      <span class="question-tag">为什么向量检索不够用</span>
+      <p>传统 RAG：`query → vector_db → top-k → context`</p>
+      <div class="answer-block">
+        <p><strong>1. 召回是"盲搜索"</strong></p>
+        <p>向量相似度 ≠ 语义相关性，更不等于"对当前任务有用的上下文"</p>
+      </div>
+      <div class="answer-block">
+        <p><strong>2. 缺乏宏观结构</strong></p>
+        <p>用户偏好、工作习惯被切碎成孤立片段，无法推断全局</p>
+      </div>
+      <div class="answer-block">
+        <p><strong>3. 无法追溯</strong></p>
+        <p>Agent 说"根据你的习惯"但无法回答"你怎么知道的"</p>
+      </div>
+      <div class="key-insight">四层记忆系统：可追溯 + 结构化 + 按需加载</div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <circle cx="100" cy="60" r="35" fill="none" stroke="#a03b00" stroke-width="2" stroke-dasharray="4"/>
+        <text x="100" y="60" text-anchor="middle" dominant-baseline="middle" fill="#444" font-size="7">Query</text>
+        <rect x="30" y="110" width="50" height="30" rx="3" fill="#5a6e8a" opacity="0.7"/>
+        <rect x="90" y="110" width="50" height="30" rx="3" fill="#5a6e8a" opacity="0.5"/>
+        <rect x="120" y="110" width="50" height="30" rx="3" fill="#8a6b5a" opacity="0.4"/>
+        <text x="55" y="129" text-anchor="middle" fill="#fff" font-size="6">相关</text>
+        <text x="115" y="129" text-anchor="middle" fill="#fff" font-size="6">边缘</text>
+        <text x="145" y="129" text-anchor="middle" fill="#fff" font-size="6">噪声</text>
+        <text x="100" y="180" text-anchor="middle" fill="#444" font-size="7">盲搜索结果</text>
+        <path d="M 100 95 L 55 110" stroke="#444" stroke-width="1"/>
+        <path d="M 100 95 L 115 110" stroke="#444" stroke-width="1"/>
+        <path d="M 100 95 L 145 110" stroke="#444" stroke-width="1"/>
+      </svg>
+    `,
+    inset: "RAG 局限"
+  },
+  {
+    label: "Q3: 四层记忆详解",
+    headline: "四层记忆详解<br><span class="headline-serif">L0/L1/L2/L3</span>",
+    body: `
+      <span class="question-tag">渐进式抽象设计</span>
+      <div class="flow-chain">
+        <div class="flow-step"><span class="arrow">→</span> L0: 原始对话层 — "录像带"，完整但无法全部回忆</div>
+        <div class="flow-step"><span class="arrow">→</span> L1: 原子结构化层 — "笔记"，persona/episodic/instruction</div>
+        <div class="flow-step"><span class="arrow">→</span> L2: 场景聚合层 — "主题块"，Markdown 场景文件</div>
+        <div class="flow-step"><span class="arrow">→</span> L3: 用户画像层 — "刻板印象"，最精炼但保留可追溯</div>
+      </div>
+      <table class="compare-table" style="margin-top: var(--space-lg);">
+        <tr><th>层级</th><th>检索速度</th><th>信息精度</th><th>Token 消耗</th></tr>
+        <tr><td>L0</td><td>慢</td><td>最高</td><td>高</td></tr>
+        <tr><td>L1</td><td>中</td><td>高</td><td>中</td></tr>
+        <tr><td>L2</td><td>快</td><td>中</td><td>低</td></tr>
+        <tr><td>L3</td><td>最快</td><td>摘要</td><td>最低</td></tr>
+      </table>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="50" y="15" width="100" height="35" rx="4" fill="#8a6b5a"/>
+        <text x="100" y="30" text-anchor="middle" fill="#fff" font-size="8">L0: Conversation</text>
+        <text x="100" y="42" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">100% 原始</text>
+        <rect x="50" y="55" width="100" height="32" rx="4" fill="#5a6e8a"/>
+        <text x="100" y="70" text-anchor="middle" fill="#fff" font-size="8">L1: Atom</text>
+        <text x="100" y="81" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">70% 抽象</text>
+        <rect x="50" y="92" width="100" height="28" rx="4" fill="#7b6b8a"/>
+        <text x="100" y="105" text-anchor="middle" fill="#fff" font-size="8">L2: Scenario</text>
+        <text x="100" y="114" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">40% 抽象</text>
+        <rect x="50" y="125" width="100" height="24" rx="4" fill="#4a7c59"/>
+        <text x="100" y="137" text-anchor="middle" fill="#fff" font-size="8">L3: Persona</text>
+        <text x="100" y="145" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">10% 抽象</text>
+        <rect x="50" y="155" width="100" height="20" rx="4" fill="#a03b00"/>
+        <text x="100" y="169" text-anchor="middle" fill="#fff" font-size="7">可追溯</text>
+        <path d="M 175 50 L 175 120" stroke="#EBE8E3" stroke-width="1" stroke-dasharray="2"/>
+        <text x="185" y="85" fill="#EBE8E3" font-size="6" transform="rotate(90 185 85)">分层抽象</text>
+      </svg>
+    `,
+    inset: "四层架构"
+  },
+  {
+    label: "Q5: Mermaid 画布",
+    headline: "Mermaid 画布<br><span class="headline-serif">98% 压缩率</span>",
+    body: `
+      <span class="question-tag">短期任务记忆压缩</span>
+      <p>长任务中工具结果过多导致上下文膨胀：</p>
+      <div class="answer-block" style="font-family: var(--font-mono); font-size: 10px; background: var(--c-taupe); color: var(--c-cream);">
+        <p>搜索结果: 5KB | 代码内容: 10KB | 错误栈: 3KB | 执行输出: 8KB</p>
+        <p style="color: var(--c-accent);">总和: 26KB ≈ 6500 tokens</p>
+      </div>
+      <p style="margin-top: var(--space-md);">Mermaid 用符号替代自然语言：</p>
+      <div style="font-family: var(--font-mono); font-size: 9px; background: var(--c-cream-deep); padding: var(--space-sm); border-radius: 4px; white-space: pre; line-height: 1.3;">
+A[需求] → B[搜索] → C[代码]
+C → D{检查} →|失败| E[修复]
+D →|成功| F[测试]</div>
+      <div class="key-insight">500 字符替代 26KB → 压缩率 98%</div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="30" y="20" width="140" height="60" rx="4" fill="#DDD8D2"/>
+        <text x="100" y="40" text-anchor="middle" fill="#444" font-size="8">工具日志</text>
+        <text x="100" y="55" text-anchor="middle" fill="#444" font-size="7">26KB</text>
+        <text x="100" y="70" text-anchor="middle" fill="#a03b00" font-size="6">6500 tokens</text>
+        <path d="M 100 80 L 100 110" stroke="#444" stroke-width="2" marker-end="url(#arrow2)"/>
+        <defs>
+          <marker id="arrow2" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
+            <polygon points="0,0 6,3 0,6" fill="#444"/>
+          </marker>
+        </defs>
+        <rect x="50" y="115" width="100" height="50" rx="4" fill="#5a6e8a"/>
+        <text x="100" y="135" text-anchor="middle" fill="#fff" font-size="8">Mermaid</text>
+        <text x="100" y="150" text-anchor="middle" fill="#fff" font-size="7">500 chars</text>
+        <text x="100" y="165" text-anchor="middle" fill="#4a7c59" font-size="6">98% 压缩</text>
+      </svg>
+    `,
+    inset: "符号压缩"
+  },
+  {
+    label: "Q6: Pipeline 调度",
+    headline: "Pipeline 调度<br><span class="headline-serif">差异化定时器</span>",
+    body: `
+      <span class="question-tag">为什么需要不同的定时器策略</span>
+      <table class="compare-table">
+        <tr><th>层级</th><th>时效性</th><th>触发频率</th><th>定时器类型</th></tr>
+        <tr><td>L1</td><td>中等</td><td>高</td><td>可重置防抖</td></tr>
+        <tr><td>L2</td><td>较低</td><td>中</td><td>只早定时器</td></tr>
+        <tr><td>L3</td><td>低</td><td>低</td><td>全局互斥队列</td></tr>
+      </table>
+      <div class="answer-block" style="margin-top: var(--space-lg);">
+        <p><strong>Warm-up 机制：</strong></p>
+        <p style="font-family: var(--font-mono); font-size: 11px;">新 session: 1 → 2 → 4 → 8</p>
+        <p style="font-size: 11px;">成熟 session: 阈值 8，避免频繁调用</p>
+      </div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="20" y="30" width="160" height="25" rx="4" fill="#5a6e8a"/>
+        <text x="100" y="47" text-anchor="middle" fill="#fff" font-size="8">L1: 防抖定时器</text>
+        <text x="170" y="47" text-anchor="end" fill="#EBE8E3" font-size="6">空闲N秒触发</text>
+        <rect x="20" y="65" width="160" height="25" rx="4" fill="#7b6b8a"/>
+        <text x="100" y="82" text-anchor="middle" fill="#fff" font-size="8">L2: 只早定时器</text>
+        <text x="170" y="82" text-anchor="end" fill="#EBE8E3" font-size="6">只能提前</text>
+        <rect x="20" y="100" width="160" height="25" rx="4" fill="#4a7c59"/>
+        <text x="100" y="117" text-anchor="middle" fill="#fff" font-size="8">L3: 串行队列</text>
+        <text x="170" y="117" text-anchor="end" fill="#EBE8E3" font-size="6">避免并发</text>
+        <rect x="20" y="140" width="160" height="30" rx="4" fill="#DDD8D2"/>
+        <text x="100" y="155" text-anchor="middle" fill="#444" font-size="7">Warm-up: 1→2→4→8</text>
+        <text x="100" y="168" text-anchor="middle" fill="#666" font-size="6">快速建立记忆</text>
+      </svg>
+    `,
+    inset: "调度策略"
+  },
+  {
+    label: "Q8: 双通道注入",
+    headline: "双通道召回<br><span class="headline-serif">Prompt Cache 优化</span>",
+    body: `
+      <span class="question-tag">为什么不能都用 system prompt</span>
+      <div class="answer-block">
+        <p><strong>appendSystemContext</strong> — 静态信息 → system prompt 后</p>
+        <p>✓ 可缓存，LLM 推理高效 | ✗ 变化时需重建缓存</p>
+      </div>
+      <div class="answer-block">
+        <p><strong>prependContext</strong> — 动态信息 → 用户消息前</p>
+        <p>✓ 每轮灵活变化 | ✗ 无法利用 prompt cache</p>
+      </div>
+      <table class="compare-table" style="margin-top: var(--space-lg);">
+        <tr><th>通道</th><th>目标</th><th>缓存策略</th></tr>
+        <tr><td>System</td><td>静态/稳定信息</td><td>长期缓存</td></tr>
+        <tr><td>User 前</td><td>动态/近期信息</td><td>不缓存</td></tr>
+      </table>
+      <div class="key-insight">RRF 融合：keyword + embedding + hybrid 三策略协同</div>
+    `,
+    visual: `
+      <svg viewBox="0 0 200 200">
+        <rect x="30" y="20" width="140" height="30" rx="4" fill="#DDD8D2"/>
+        <text x="100" y="40" text-anchor="middle" fill="#444" font-size="8">System Prompt</text>
+        <rect x="30" y="55" width="140" height="22" rx="3" fill="#DDD8D2" opacity="0.8"/>
+        <text x="100" y="70" text-anchor="middle" fill="#444" font-size="7">L2 Scene + L3 Persona</text>
+        <rect x="30" y="82" width="140" height="18" rx="3" fill="#DDD8D2" opacity="0.6"/>
+        <text x="100" y="95" text-anchor="middle" fill="#444" font-size="6">L1 Static</text>
+        <rect x="30" y="110" width="140" height="18" rx="3" fill="#6B655F" opacity="0.5"/>
+        <text x="100" y="123" text-anchor="middle" fill="#444" font-size="6">Cache Zone</text>
+        <line x1="20" y1="65" x2="30" y2="65" stroke="#4a7c59" stroke-width="2"/>
+        <rect x="30" y="135" width="140" height="22" rx="4" fill="#a03b00"/>
+        <text x="100" y="150" text-anchor="middle" fill="#fff" font-size="7">User Message</text>
+        <line x1="20" y1="146" x2="30" y2="146" stroke="#a03b00" stroke-width="2"/>
+        <rect x="30" y="162" width="140" height="18" rx="3" fill="#5a6e8a"/>
+        <text x="100" y="175" text-anchor="middle" fill="#fff" font-size="6">L1 Dynamic</text>
+        <text x="100" y="195" text-anchor="middle" fill="#666" font-size="6">Dynamic Zone</text>
+      </svg>
+    `,
+    inset: "召回通道"
+  }
+];
+
+let currentChapter = 0;
+
+function renderChapter(index) {
+  const chapter = chapters[index];
+  document.getElementById('header-label').textContent = chapter.label;
+  document.getElementById('headline').innerHTML = chapter.headline;
+  document.getElementById('body-text').innerHTML = chapter.body;
+  document.getElementById('visual-object').innerHTML = chapter.visual;
+  document.getElementById('visual-inset').textContent = chapter.inset;
+  document.getElementById('chapter-indicator').textContent = `Chapter ${index + 1} of ${chapters.length}`;
+
+  const pagination = document.getElementById('pagination');
+  pagination.innerHTML = chapters.map((_, i) =>
+    `<span class="dot ${i === index ? 'active' : ''}" onclick="goToChapter(${i})"></span>`
+  ).join('');
+
+  const prevBtn = document.getElementById('nav-prev');
+  prevBtn.textContent = index > 0 ? '← Prev' : '';
+  prevBtn.style.visibility = index > 0 ? 'visible' : 'hidden';
+
+  document.getElementById('scroll-content').scrollTop = 0;
+}
+
+function goToChapter(index) {
+  currentChapter = index;
+  renderChapter(currentChapter);
+}
+
+function nextChapter() {
+  if (currentChapter < chapters.length - 1) {
+    currentChapter++;
+    renderChapter(currentChapter);
+  }
+}
+
+function prevChapter() {
+  if (currentChapter > 0) {
+    currentChapter--;
+    renderChapter(currentChapter);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextChapter(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); prevChapter(); }
+});
+
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => {
+  const diff = touchStartX - e.changedTouches[0].clientX;
+  if (Math.abs(diff) > 50) { if (diff > 0) nextChapter(); else prevChapter(); }
+});
+
+renderChapter(0);
+</script>
+
+</body>
+</html>
