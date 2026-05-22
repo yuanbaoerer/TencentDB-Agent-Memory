@@ -1,636 +1,3104 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-ha-style="architectural-spread">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TencentDB Agent Memory · 面试深度解析</title>
+  <title>TencentDB Agent Memory 面试总结</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --c-taupe: #6B655F;
-      --c-taupe-dark: #4A453F;
-      --c-cream: #EBE8E3;
-      --c-cream-deep: #DDD8D2;
-      --c-moss: #2A3826;
-      --c-black: #111111;
-      --c-white: #FFFFFF;
-      --c-ink-muted: #444444;
-      --c-rule: rgba(17, 17, 17, 0.22);
-      --c-accent: #a03b00;
-      --c-l3: #4a7c59;
-      --c-l2: #7b6b8a;
-      --c-l1: #5a6e8a;
-      --c-l0: #8a6b5a;
-      --c-highlight: #c94c00;
-
-      --font-sans: 'Noto Sans SC', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      --font-serif: 'Noto Serif SC', 'Times New Roman', Times, serif;
-
-      --spacing-unit: 2rem;
-      --page-padding: clamp(1.4rem, 4vw, 3rem);
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #6e7681;
+      --accent-cyan: #58a6ff;
+      --accent-teal: #3fb950;
+      --accent-amber: #d29922;
+      --accent-purple: #a371f7;
+      --accent-pink: #f778ba;
+      --border-subtle: rgba(139, 148, 158, 0.15);
+      --border-accent: rgba(88, 166, 255, 0.3);
+      --glow-cyan: rgba(88, 166, 255, 0.15);
+      --glow-teal: rgba(63, 185, 80, 0.15);
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 80px;
+    }
 
     body {
-      font-family: var(--font-sans);
-      background: var(--c-cream);
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    .architectural-viewport {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      height: 100vh;
-      width: 100vw;
-    }
-
-    .col-visual {
-      background: var(--c-taupe);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      padding: var(--page-padding);
-      overflow: hidden;
-    }
-
-    .col-content {
-      background: var(--c-cream);
-      display: flex;
-      flex-direction: column;
-      padding: var(--page-padding);
-      overflow: hidden;
-    }
-
-    .visual-object {
-      width: clamp(180px, 35vw, 320px);
-      height: clamp(180px, 35vw, 320px);
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .visual-object svg { width: 100%; height: 100%; }
-
-    .visual-inset {
-      position: absolute;
-      bottom: var(--page-padding);
-      left: var(--page-padding);
-      width: clamp(80px, 15vw, 140px);
-      height: clamp(60px, 12vw, 100px);
-      background: var(--c-taupe-dark);
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      color: var(--c-cream);
-      opacity: 0.7;
-    }
-
-    .header-label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--c-ink-muted);
-      margin-bottom: var(--space-lg);
-    }
-
-    .headline {
-      font-family: var(--font-sans);
-      font-size: clamp(1.8rem, 3.5vw, 2.8rem);
-      font-weight: 300;
-      line-height: 1.1;
-      letter-spacing: -0.02em;
-      color: var(--c-black);
-      margin-bottom: var(--space-xl);
-    }
-
-    .headline-serif {
-      font-family: var(--font-serif);
-      font-style: italic;
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.75;
+      font-size: 16px;
       font-weight: 400;
+      -webkit-font-smoothing: antialiased;
     }
 
-    .body-text {
-      font-size: 13px;
-      line-height: 1.65;
-      color: var(--c-ink-muted);
-      max-width: 340px;
+    ::selection {
+      background: var(--accent-cyan);
+      color: var(--bg-primary);
     }
 
-    .body-text p { margin-bottom: var(--space-lg); }
-
-    .body-text code {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      background: var(--c-cream-deep);
-      padding: 2px 6px;
-      border-radius: 3px;
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
     }
 
-    .nav-anchor {
-      position: absolute;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--c-ink-muted);
-      cursor: pointer;
-      user-select: none;
-      opacity: 0.6;
-      transition: opacity 0.2s;
+    ::-webkit-scrollbar-track {
+      background: var(--bg-secondary);
     }
 
-    .nav-anchor:hover { opacity: 1; }
-    .nav-close { top: var(--page-padding); right: var(--page-padding); }
-    .nav-more { bottom: var(--page-padding); right: var(--page-padding); }
-    .nav-prev { bottom: var(--page-padding); left: 50%; transform: translateX(-50%); }
-
-    .pagination {
-      position: absolute;
-      bottom: var(--page-padding);
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--c-rule);
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .dot.active { background: var(--c-accent); transform: scale(1.3); }
-    .dot:hover { background: var(--c-ink-muted); }
-
-    .chapter-indicator {
-      font-size: 11px;
-      color: var(--c-ink-muted);
-      opacity: 0.5;
-      margin-top: auto;
-      padding-top: var(--space-xl);
-    }
-
-    .question-tag {
-      display: inline-block;
-      background: var(--c-accent);
-      color: var(--c-white);
-      font-size: 10px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 3px;
-      margin-bottom: var(--space-md);
-    }
-
-    .answer-block {
-      background: var(--c-cream-deep);
-      padding: var(--space-md);
-      border-radius: 6px;
-      margin-top: var(--space-md);
-      border-left: 3px solid var(--c-accent);
-    }
-
-    .answer-block p {
-      font-size: 12px;
-      color: var(--c-ink-muted);
-      margin-bottom: var(--space-sm);
-    }
-
-    .key-insight {
-      background: linear-gradient(135deg, var(--c-accent) 0%, var(--c-highlight) 100%);
-      color: var(--c-white);
-      padding: var(--space-sm) var(--space-md);
+    ::-webkit-scrollbar-thumb {
+      background: var(--bg-tertiary);
       border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      margin-top: var(--space-md);
-      display: inline-block;
     }
 
-    .stat-row {
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* Navigation Sidebar */
+    .nav-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 280px;
+      height: 100vh;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-subtle);
+      padding: 32px 0;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .nav-header {
+      padding: 0 24px 32px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 24px;
+    }
+
+    .nav-logo {
       display: flex;
-      gap: var(--space-lg);
-      margin-top: var(--space-lg);
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
     }
 
-    .stat-box {
-      text-align: center;
-      padding: var(--space-md);
-      background: var(--c-cream-deep);
-      border-radius: 6px;
-      flex: 1;
+    .nav-logo-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-teal));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--bg-primary);
     }
 
-    .stat-box .value {
-      font-size: 24px;
+    .nav-title {
+      font-family: 'Newsreader', serif;
+      font-size: 18px;
       font-weight: 600;
-      color: var(--c-accent);
+      color: var(--text-primary);
+      line-height: 1.3;
     }
 
-    .stat-box .label {
-      font-size: 10px;
-      color: var(--c-ink-muted);
+    .nav-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
       margin-top: 4px;
     }
 
-    .compare-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: var(--space-md);
+    .nav-section {
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+
+    .nav-section-title {
       font-size: 11px;
-    }
-
-    .compare-table th {
-      background: var(--c-cream-deep);
-      padding: var(--space-sm);
-      text-align: left;
       font-weight: 600;
-      color: var(--c-black);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 12px 12px 8px;
     }
 
-    .compare-table td {
-      padding: var(--space-sm);
-      border-bottom: 1px solid var(--c-rule);
-      color: var(--c-ink-muted);
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: all 0.2s ease;
+      cursor: pointer;
     }
 
-    .scroll-content {
-      flex: 1;
-      overflow-y: auto;
-      padding-right: var(--space-md);
+    .nav-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
     }
 
-    .scroll-content::-webkit-scrollbar { width: 4px; }
-    .scroll-content::-webkit-scrollbar-track { background: transparent; }
-    .scroll-content::-webkit-scrollbar-thumb { background: var(--c-rule); border-radius: 2px; }
+    .nav-item.active {
+      background: var(--glow-cyan);
+      color: var(--accent-cyan);
+    }
 
-    .flow-chain {
+    .nav-item-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .nav-item-icon.l0 { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+    .nav-item-icon.l1 { background: var(--glow-cyan); color: var(--accent-cyan); }
+    .nav-item-icon.l2 { background: var(--glow-teal); color: var(--accent-teal); }
+    .nav-item-icon.l3 { background: rgba(163, 113, 247, 0.15); color: var(--accent-purple); }
+
+    /* Layer legend in nav */
+    .layer-legend {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-subtle);
+      margin-top: auto;
+    }
+
+    .layer-legend-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .layer-items {
       display: flex;
       flex-direction: column;
-      gap: var(--space-sm);
-      margin-top: var(--space-md);
+      gap: 8px;
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .layer-badge {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .layer-badge.l0 { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+    .layer-badge.l1 { background: rgba(88, 166, 255, 0.2); color: var(--accent-cyan); }
+    .layer-badge.l2 { background: rgba(63, 185, 80, 0.2); color: var(--accent-teal); }
+    .layer-badge.l3 { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+
+    /* Main Content */
+    .main-content {
+      margin-left: 280px;
+      padding: 48px 64px 120px;
+      max-width: 900px;
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 60px 0 80px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 400px;
+      background: radial-gradient(ellipse at center, var(--glow-cyan) 0%, transparent 70%);
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+    }
+
+    .hero-badge-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-teal);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.2); }
+    }
+
+    .hero h1 {
+      font-family: 'Newsreader', serif;
+      font-size: 56px;
+      font-weight: 600;
+      line-height: 1.15;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 40px;
+      font-weight: 300;
+    }
+
+    .hero-meta {
+      display: flex;
+      justify-content: center;
+      gap: 32px;
+    }
+
+    .hero-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .hero-meta-item svg {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+    }
+
+    /* Section Styling */
+    .section {
+      margin-bottom: 80px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeInUp 0.6s ease forwards;
+    }
+
+    @keyframes fadeInUp {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .section:nth-child(1) { animation-delay: 0.1s; }
+    .section:nth-child(2) { animation-delay: 0.15s; }
+    .section:nth-child(3) { animation-delay: 0.2s; }
+    .section:nth-child(4) { animation-delay: 0.25s; }
+    .section:nth-child(5) { animation-delay: 0.3s; }
+    .section:nth-child(6) { animation-delay: 0.35s; }
+    .section:nth-child(7) { animation-delay: 0.4s; }
+    .section:nth-child(8) { animation-delay: 0.45s; }
+    .section:nth-child(9) { animation-delay: 0.5s; }
+
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border-subtle), transparent);
+      margin: 80px 0;
+    }
+
+    .chapter-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .chapter-label::before {
+      content: '';
+      width: 24px;
+      height: 2px;
+      background: var(--accent-cyan);
+      border-radius: 1px;
+    }
+
+    .section h2 {
+      font-family: 'Newsreader', serif;
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.3;
+      margin-bottom: 24px;
+      color: var(--text-primary);
+    }
+
+    .section h3 {
+      font-family: 'Newsreader', serif;
+      font-size: 24px;
+      font-weight: 500;
+      line-height: 1.4;
+      margin: 40px 0 16px;
+      color: var(--text-primary);
+    }
+
+    .section h4 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin: 24px 0 12px;
+    }
+
+    .section p {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.8;
+    }
+
+    /* Question Block */
+    .question-block {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 32px;
+      margin: 32px 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .question-block::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-teal));
+    }
+
+    .question-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .question-number {
+      width: 48px;
+      height: 48px;
+      background: var(--glow-cyan);
+      border: 1px solid var(--border-accent);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Newsreader', serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+    }
+
+    .question-title {
+      font-family: 'Newsreader', serif;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .question-content {
+      padding-left: 64px;
+    }
+
+    /* Layer Indicator */
+    .layer-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .layer-indicator.l0 { background: rgba(139, 148, 158, 0.15); color: var(--text-secondary); }
+    .layer-indicator.l1 { background: rgba(88, 166, 255, 0.15); color: var(--accent-cyan); }
+    .layer-indicator.l2 { background: rgba(63, 185, 80, 0.15); color: var(--accent-teal); }
+    .layer-indicator.l3 { background: rgba(163, 113, 247, 0.15); color: var(--accent-purple); }
+
+    /* Callout Box */
+    .callout {
+      padding: 20px 24px;
+      border-radius: 12px;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .callout.info {
+      background: var(--glow-cyan);
+      border: 1px solid var(--border-accent);
+    }
+
+    .callout.warning {
+      background: rgba(210, 153, 34, 0.1);
+      border: 1px solid rgba(210, 153, 34, 0.3);
+    }
+
+    .callout-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .callout.info .callout-title { color: var(--accent-cyan); }
+    .callout.warning .callout-title { color: var(--accent-amber); }
+
+    .callout-content {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    /* Code Block */
+    .code-block {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .code-filename {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .code-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .code-dot.red { background: #ff5f57; }
+    .code-dot.yellow { background: #febc2e; }
+    .code-dot.green { background: #28c840; }
+
+    .code-content {
+      padding: 20px;
+      overflow-x: auto;
+    }
+
+    pre {
+      margin: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-primary);
+      white-space: pre;
+    }
+
+    code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    .inline-code {
+      background: var(--bg-tertiary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      color: var(--accent-cyan);
+    }
+
+    /* Syntax Highlighting */
+    .keyword { color: var(--accent-purple); }
+    .string { color: var(--accent-teal); }
+    .comment { color: var(--text-muted); font-style: italic; }
+    .function { color: var(--accent-cyan); }
+    .number { color: var(--accent-amber); }
+
+    /* Table */
+    .table-wrapper {
+      overflow-x: auto;
+      margin: 24px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead {
+      background: var(--bg-tertiary);
+    }
+
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+
+    tr:hover td {
+      background: var(--bg-secondary);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    /* Mermaid Diagram */
+    .mermaid-wrapper {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+      text-align: center;
+    }
+
+    .mermaid-diagram {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mermaid-node {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      min-width: 120px;
+    }
+
+    .mermaid-node.primary {
+      background: var(--glow-cyan);
+      color: var(--accent-cyan);
+      border: 1px solid var(--border-accent);
+    }
+
+    .mermaid-node.secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .mermaid-node.decision {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(210, 153, 34, 0.3);
+      border-radius: 50%;
+      width: 80px;
+      height: 80px;
+    }
+
+    .mermaid-node.success {
+      background: var(--glow-teal);
+      color: var(--accent-teal);
+      border: 1px solid rgba(63, 185, 80, 0.3);
+    }
+
+    .mermaid-arrow {
+      color: var(--text-muted);
+      font-size: 20px;
+    }
+
+    /* Flow Diagram */
+    .flow-diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+      padding: 20px;
     }
 
     .flow-step {
       display: flex;
       align-items: center;
-      gap: var(--space-sm);
-      padding: var(--space-sm) var(--space-md);
-      background: rgba(255,255,255,0.08);
+      gap: 12px;
+    }
+
+    .flow-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 120px;
+    }
+
+    .flow-arrow {
+      color: var(--text-muted);
+    }
+
+    /* Stats Card */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin: 24px 0;
+    }
+
+    .stat-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: 'Newsreader', serif;
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .stat-change {
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .stat-change.positive { color: var(--accent-teal); }
+    .stat-change.negative { color: var(--accent-pink); }
+
+    /* Quote Block */
+    .quote-block {
+      border-left: 3px solid var(--accent-cyan);
+      padding-left: 24px;
+      margin: 24px 0;
+    }
+
+    .quote-block p {
+      font-family: 'Newsreader', serif;
+      font-size: 20px;
+      font-style: italic;
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+
+    /* List Styles */
+    ul, ol {
+      padding-left: 24px;
+      margin: 16px 0;
+    }
+
+    li {
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    li::marker {
+      color: var(--accent-cyan);
+    }
+
+    /* Emphasis */
+    .highlight {
+      background: linear-gradient(135deg, var(--glow-cyan), transparent);
+      padding: 2px 8px;
       border-radius: 4px;
-      font-size: 11px;
-      color: var(--c-cream);
     }
 
-    .flow-step .arrow {
+    /* Key Points */
+    .key-points {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .key-point {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .key-point-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--glow-cyan);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--accent-cyan);
+    }
+
+    .key-point-content {
+      flex: 1;
+    }
+
+    .key-point-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .key-point-text {
       font-size: 14px;
-      opacity: 0.5;
+      color: var(--text-secondary);
     }
 
-    @media (max-width: 768px) {
-      .architectural-viewport {
-        grid-template-columns: 1fr;
-        grid-template-rows: 40vh 1fr;
-        height: auto;
-        overflow-y: auto;
+    /* Architecture Diagram */
+    .architecture-diagram {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 32px;
+      margin: 24px 0;
+    }
+
+    .layer-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .layer-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .layer-badge-large {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .layer-badge-large.l0 { background: rgba(139, 148, 158, 0.2); color: var(--text-secondary); }
+    .layer-badge-large.l1 { background: var(--glow-cyan); color: var(--accent-cyan); }
+    .layer-badge-large.l2 { background: var(--glow-teal); color: var(--accent-teal); }
+    .layer-badge-large.l3 { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+
+    .layer-bar {
+      flex: 1;
+      height: 56px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+    }
+
+    .layer-bar.l0 { background: rgba(139, 148, 158, 0.1); }
+    .layer-bar.l1 { background: rgba(88, 166, 255, 0.1); }
+    .layer-bar.l2 { background: rgba(63, 185, 80, 0.1); }
+    .layer-bar.l3 { background: rgba(163, 113, 247, 0.1); }
+
+    .layer-bar-content {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .layer-bar.l0 .layer-bar-content { color: var(--text-secondary); }
+    .layer-bar.l1 .layer-bar-content { color: var(--accent-cyan); }
+    .layer-bar.l2 .layer-bar-content { color: var(--accent-teal); }
+    .layer-bar.l3 .layer-bar-content { color: var(--accent-purple); }
+
+    /* Footer */
+    .footer {
+      margin-top: 120px;
+      padding-top: 40px;
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+    }
+
+    .footer-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .footer-version {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .nav-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
       }
 
-      body { height: auto; overflow: auto; }
-      .col-visual { padding: var(--space-xl); }
-      .col-content { padding: var(--space-xl) var(--page-padding); max-height: none; }
-      .visual-inset, .nav-anchor { display: none; }
-      .scroll-content { overflow: visible; }
+      .nav-sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main-content {
+        margin-left: 0;
+        padding: 32px 24px;
+      }
+
+      .hero h1 {
+        font-size: 36px;
+      }
+
+      .question-content {
+        padding-left: 0;
+      }
+    }
+
+    /* Print Styles */
+    @media print {
+      .nav-sidebar {
+        display: none;
+      }
+
+      .main-content {
+        margin-left: 0;
+      }
+
+      .section {
+        opacity: 1;
+        transform: none;
+      }
+    }
+
+    /* Focus states for accessibility */
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent-cyan);
+      outline-offset: 2px;
+    }
+
+    /* Table of Contents */
+    .toc {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px;
+      margin: 32px 0;
+    }
+
+    .toc-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toc-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 8px;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .toc-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .toc-item:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    /* Workflow Diagram */
+    .workflow-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 24px;
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .workflow-step {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: var(--bg-tertiary);
+      border-radius: 10px;
+      position: relative;
+    }
+
+    .workflow-step::before {
+      content: '';
+      position: absolute;
+      left: 40px;
+      top: 100%;
+      width: 2px;
+      height: 16px;
+      background: var(--border-subtle);
+    }
+
+    .workflow-step:last-child::before {
+      display: none;
+    }
+
+    .workflow-number {
+      width: 32px;
+      height: 32px;
+      background: var(--glow-cyan);
+      border: 1px solid var(--border-accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+    }
+
+    .workflow-content {
+      flex: 1;
+    }
+
+    .workflow-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .workflow-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Comparison Table */
+    .comparison-table {
+      margin: 24px 0;
+    }
+
+    .comparison-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .comparison-row:last-child {
+      border-bottom: none;
+    }
+
+    .comparison-header {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--border-subtle);
+    }
+
+    .comparison-cell {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .comparison-cell.highlight {
+      color: var(--accent-cyan);
+      font-weight: 500;
     }
   </style>
 </head>
 <body>
-
-<div class="architectural-viewport" id="viewport">
-  <div class="col-visual">
-    <div class="visual-object" id="visual-object"></div>
-    <div class="visual-inset" id="visual-inset">面试要点</div>
-    <span class="nav-anchor nav-close" onclick="window.close()">Close ( × )</span>
-    <span class="nav-anchor nav-prev" id="nav-prev" onclick="prevChapter()">← Prev</span>
-  </div>
-
-  <div class="col-content">
-    <div class="scroll-content" id="scroll-content">
-      <div class="header-label" id="header-label">Q1</div>
-      <h1 class="headline" id="headline">
-        AI 代理的核心问题<br><span class="headline-serif">上下文管理矛盾</span>
-      </h1>
-      <div class="body-text" id="body-text"></div>
-      <div class="chapter-indicator" id="chapter-indicator">Chapter 1 of 6</div>
+  <!-- Navigation Sidebar -->
+  <nav class="nav-sidebar" id="sidebar">
+    <div class="nav-header">
+      <div class="nav-logo">
+        <div class="nav-logo-icon">TM</div>
+        <div>
+          <div class="nav-title">Agent Memory</div>
+          <div class="nav-subtitle">四层记忆系统</div>
+        </div>
+      </div>
     </div>
-    <div class="pagination" id="pagination"></div>
-  </div>
-</div>
 
-<script>
-const chapters = [
-  {
-    label: "Q1: 核心问题",
-    headline: "AI 代理的核心问题<br><span class='headline-serif'>上下文管理矛盾</span>",
-    body: `
-      <span class="question-tag">问题背景</span>
-      <p>AI 代理在处理长对话、长任务时面临两个根本矛盾：</p>
-      <table class="compare-table">
-        <tr><th>矛盾</th><th>表现</th><th>后果</th></tr>
-        <tr><td>上下文遗忘</td><td>LLM context window 有限</td><td>早期信息被挤出</td></tr>
-        <tr><td>上下文膨胀</td><td>记忆越多 → token 越多</td><td>成本高、性能下降</td></tr>
-      </table>
-      <div class="stat-row">
-        <div class="stat-box">
-          <div class="value">-61%</div>
-          <div class="label">Token 消耗降低</div>
+    <div class="nav-section">
+      <div class="nav-section-title">概述</div>
+      <a href="#overview" class="nav-item active">
+        <span class="nav-item-icon">📋</span>
+        文档导航
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">问题背景</div>
+      <a href="#q1" class="nav-item">
+        <span class="nav-item-icon l0">Q1</span>
+        核心问题与动机
+      </a>
+      <a href="#q2" class="nav-item">
+        <span class="nav-item-icon l0">Q2</span>
+        传统 RAG 的局限
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">四层记忆详解</div>
+      <a href="#q3" class="nav-item">
+        <span class="nav-item-icon l0">L0</span>
+        对话原始层
+      </a>
+      <a href="#q3" class="nav-item">
+        <span class="nav-item-icon l1">L1</span>
+        原子结构化层
+      </a>
+      <a href="#q3" class="nav-item">
+        <span class="nav-item-icon l2">L2</span>
+        场景聚合层
+      </a>
+      <a href="#q3" class="nav-item">
+        <span class="nav-item-icon l3">L3</span>
+        用户画像层
+      </a>
+      <a href="#q4" class="nav-item">
+        <span class="nav-item-icon">🔗</span>
+        钻取链路
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">技术实现</div>
+      <a href="#q5" class="nav-item">
+        <span class="nav-item-icon">📊</span>
+        Mermaid 画布
+      </a>
+      <a href="#q6" class="nav-item">
+        <span class="nav-item-icon">⏱️</span>
+        Pipeline 调度
+      </a>
+      <a href="#q7" class="nav-item">
+        <span class="nav-item-icon">🔥</span>
+        Warm-up 机制
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">召回机制</div>
+      <a href="#q8" class="nav-item">
+        <span class="nav-item-icon">💉</span>
+        双通道注入
+      </a>
+      <a href="#q9" class="nav-item">
+        <span class="nav-item-icon">🔍</span>
+        三种召回策略
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">架构设计</div>
+      <a href="#q10" class="nav-item">
+        <span class="nav-item-icon">💾</span>
+        双轨存储
+      </a>
+      <a href="#q11" class="nav-item">
+        <span class="nav-item-icon">🔌</span>
+        HostAdapter 模式
+      </a>
+      <a href="#q12" class="nav-item">
+        <span class="nav-item-icon">🔄</span>
+        生命周期管理
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-title">面试准备</div>
+      <a href="#q13" class="nav-item">
+        <span class="nav-item-icon">⚖️</span>
+        设计权衡
+      </a>
+      <a href="#q14" class="nav-item">
+        <span class="nav-item-icon">🎯</span>
+        高频问题
+      </a>
+      <a href="#q15" class="nav-item">
+        <span class="nav-item-icon">📈</span>
+        局限与改进
+      </a>
+    </div>
+
+    <div class="layer-legend">
+      <div class="layer-legend-title">记忆层级速查</div>
+      <div class="layer-items">
+        <div class="layer-item">
+          <span class="layer-badge l0">L0</span>
+          <span>原始对话 - 证据层</span>
         </div>
-        <div class="stat-box">
-          <div class="value">+51%</div>
-          <div class="label">任务通过率提升</div>
+        <div class="layer-item">
+          <span class="layer-badge l1">L1</span>
+          <span>原子记忆 - 结构化层</span>
+        </div>
+        <div class="layer-item">
+          <span class="layer-badge l2">L2</span>
+          <span>场景聚合 - 主题层</span>
+        </div>
+        <div class="layer-item">
+          <span class="layer-badge l3">L3</span>
+          <span>用户画像 - 摘要层</span>
         </div>
       </div>
-      <div class="key-insight">解决思路：分层记忆 + 符号化压缩 + 按需召回</div>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <rect x="40" y="20" width="120" height="60" rx="4" fill="#5a6e8a" opacity="0.8"/>
-        <text x="100" y="45" text-anchor="middle" fill="#fff" font-size="9">Context Window</text>
-        <text x="100" y="62" text-anchor="middle" fill="#fff" font-size="7" opacity="0.8">Limited Size</text>
-        <rect x="40" y="95" width="120" height="40" rx="4" fill="#8a6b5a" opacity="0.6"/>
-        <text x="100" y="118" text-anchor="middle" fill="#fff" font-size="8">Old Info Pushed Out</text>
-        <rect x="40" y="150" width="120" height="30" rx="4" fill="#a03b00"/>
-        <text x="100" y="169" text-anchor="middle" fill="#fff" font-size="8">Memory System</text>
-        <path d="M 100 80 L 100 95" stroke="#fff" stroke-width="2" marker-end="url(#arrowhead)"/>
-        <defs>
-          <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <polygon points="0,0 6,3 0,6" fill="#fff"/>
-          </marker>
-        </defs>
-      </svg>
-    `,
-    inset: "上下文矛盾"
-  },
-  {
-    label: "Q2: 传统 RAG 局限",
-    headline: "传统 RAG 的<br><span class="headline-serif">三个根本缺陷</span>",
-    body: `
-      <span class="question-tag">为什么向量检索不够用</span>
-      <p>传统 RAG：`query → vector_db → top-k → context`</p>
-      <div class="answer-block">
-        <p><strong>1. 召回是"盲搜索"</strong></p>
-        <p>向量相似度 ≠ 语义相关性，更不等于"对当前任务有用的上下文"</p>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Hero Section -->
+    <header class="hero" id="overview">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        <span>系统设计面试指南</span>
       </div>
-      <div class="answer-block">
-        <p><strong>2. 缺乏宏观结构</strong></p>
-        <p>用户偏好、工作习惯被切碎成孤立片段，无法推断全局</p>
+      <h1>TencentDB Agent Memory<br>面试总结</h1>
+      <p class="hero-subtitle">基于四层记忆系统的 AI 代理插件设计思路</p>
+      <div class="hero-meta">
+        <span class="hero-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+            <line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/>
+            <line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span>适用场景：系统设计面试、架构设计讨论</span>
+        </span>
+        <span class="hero-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <span>v2.0 详尽版 · 2026/05/21</span>
+        </span>
       </div>
-      <div class="answer-block">
-        <p><strong>3. 无法追溯</strong></p>
-        <p>Agent 说"根据你的习惯"但无法回答"你怎么知道的"</p>
+
+      <!-- Quick Stats -->
+      <div class="stats-grid" style="margin-top: 48px;">
+        <div class="stat-card">
+          <div class="stat-label">Token 优化</div>
+          <div class="stat-value">-61%</div>
+          <div class="stat-change positive">221M → 85M</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">任务通过率提升</div>
+          <div class="stat-value">+52%</div>
+          <div class="stat-change positive">33% → 50%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">记忆层级</div>
+          <div class="stat-value">4层</div>
+          <div class="stat-change positive">L0 → L1 → L2 → L3</div>
+        </div>
       </div>
-      <div class="key-insight">四层记忆系统：可追溯 + 结构化 + 按需加载</div>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <circle cx="100" cy="60" r="35" fill="none" stroke="#a03b00" stroke-width="2" stroke-dasharray="4"/>
-        <text x="100" y="60" text-anchor="middle" dominant-baseline="middle" fill="#444" font-size="7">Query</text>
-        <rect x="30" y="110" width="50" height="30" rx="3" fill="#5a6e8a" opacity="0.7"/>
-        <rect x="90" y="110" width="50" height="30" rx="3" fill="#5a6e8a" opacity="0.5"/>
-        <rect x="120" y="110" width="50" height="30" rx="3" fill="#8a6b5a" opacity="0.4"/>
-        <text x="55" y="129" text-anchor="middle" fill="#fff" font-size="6">相关</text>
-        <text x="115" y="129" text-anchor="middle" fill="#fff" font-size="6">边缘</text>
-        <text x="145" y="129" text-anchor="middle" fill="#fff" font-size="6">噪声</text>
-        <text x="100" y="180" text-anchor="middle" fill="#444" font-size="7">盲搜索结果</text>
-        <path d="M 100 95 L 55 110" stroke="#444" stroke-width="1"/>
-        <path d="M 100 95 L 115 110" stroke="#444" stroke-width="1"/>
-        <path d="M 100 95 L 145 110" stroke="#444" stroke-width="1"/>
-      </svg>
-    `,
-    inset: "RAG 局限"
-  },
-  {
-    label: "Q3: 四层记忆详解",
-    headline: "四层记忆详解<br><span class="headline-serif">L0/L1/L2/L3</span>",
-    body: `
-      <span class="question-tag">渐进式抽象设计</span>
-      <div class="flow-chain">
-        <div class="flow-step"><span class="arrow">→</span> L0: 原始对话层 — "录像带"，完整但无法全部回忆</div>
-        <div class="flow-step"><span class="arrow">→</span> L1: 原子结构化层 — "笔记"，persona/episodic/instruction</div>
-        <div class="flow-step"><span class="arrow">→</span> L2: 场景聚合层 — "主题块"，Markdown 场景文件</div>
-        <div class="flow-step"><span class="arrow">→</span> L3: 用户画像层 — "刻板印象"，最精炼但保留可追溯</div>
+    </header>
+
+    <!-- Table of Contents -->
+    <nav class="toc">
+      <div class="toc-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="6" x2="21" y2="6"/>
+          <line x1="8" y1="12" x2="21" y2="12"/>
+          <line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/>
+          <line x1="3" y1="12" x2="3.01" y2="12"/>
+          <line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+        文档目录
       </div>
-      <table class="compare-table" style="margin-top: var(--space-lg);">
-        <tr><th>层级</th><th>检索速度</th><th>信息精度</th><th>Token 消耗</th></tr>
-        <tr><td>L0</td><td>慢</td><td>最高</td><td>高</td></tr>
-        <tr><td>L1</td><td>中</td><td>高</td><td>中</td></tr>
-        <tr><td>L2</td><td>快</td><td>中</td><td>低</td></tr>
-        <tr><td>L3</td><td>最快</td><td>摘要</td><td>最低</td></tr>
-      </table>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <rect x="50" y="15" width="100" height="35" rx="4" fill="#8a6b5a"/>
-        <text x="100" y="30" text-anchor="middle" fill="#fff" font-size="8">L0: Conversation</text>
-        <text x="100" y="42" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">100% 原始</text>
-        <rect x="50" y="55" width="100" height="32" rx="4" fill="#5a6e8a"/>
-        <text x="100" y="70" text-anchor="middle" fill="#fff" font-size="8">L1: Atom</text>
-        <text x="100" y="81" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">70% 抽象</text>
-        <rect x="50" y="92" width="100" height="28" rx="4" fill="#7b6b8a"/>
-        <text x="100" y="105" text-anchor="middle" fill="#fff" font-size="8">L2: Scenario</text>
-        <text x="100" y="114" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">40% 抽象</text>
-        <rect x="50" y="125" width="100" height="24" rx="4" fill="#4a7c59"/>
-        <text x="100" y="137" text-anchor="middle" fill="#fff" font-size="8">L3: Persona</text>
-        <text x="100" y="145" text-anchor="middle" fill="#fff" font-size="6" opacity="0.7">10% 抽象</text>
-        <rect x="50" y="155" width="100" height="20" rx="4" fill="#a03b00"/>
-        <text x="100" y="169" text-anchor="middle" fill="#fff" font-size="7">可追溯</text>
-        <path d="M 175 50 L 175 120" stroke="#EBE8E3" stroke-width="1" stroke-dasharray="2"/>
-        <text x="185" y="85" fill="#EBE8E3" font-size="6" transform="rotate(90 185 85)">分层抽象</text>
-      </svg>
-    `,
-    inset: "四层架构"
-  },
-  {
-    label: "Q5: Mermaid 画布",
-    headline: "Mermaid 画布<br><span class="headline-serif">98% 压缩率</span>",
-    body: `
-      <span class="question-tag">短期任务记忆压缩</span>
-      <p>长任务中工具结果过多导致上下文膨胀：</p>
-      <div class="answer-block" style="font-family: var(--font-mono); font-size: 10px; background: var(--c-taupe); color: var(--c-cream);">
-        <p>搜索结果: 5KB | 代码内容: 10KB | 错误栈: 3KB | 执行输出: 8KB</p>
-        <p style="color: var(--c-accent);">总和: 26KB ≈ 6500 tokens</p>
+      <ul class="toc-list">
+        <a href="#q1" class="toc-item">Q1: AI 代理核心问题</a>
+        <a href="#q2" class="toc-item">Q2: 传统 RAG 局限</a>
+        <a href="#q3" class="toc-item">Q3: 四层记忆设计</a>
+        <a href="#q4" class="toc-item">Q4: 钻取链路机制</a>
+        <a href="#q5" class="toc-item">Q5: Mermaid 画布</a>
+        <a href="#q6" class="toc-item">Q6: Pipeline 调度</a>
+        <a href="#q7" class="toc-item">Q7: Warm-up 机制</a>
+        <a href="#q8" class="toc-item">Q8: 双通道注入</a>
+        <a href="#q9" class="toc-item">Q9: 三种召回策略</a>
+        <a href="#q10" class="toc-item">Q10: 双轨存储</a>
+        <a href="#q11" class="toc-item">Q11: HostAdapter 模式</a>
+        <a href="#q12" class="toc-item">Q12: 生命周期管理</a>
+        <a href="#q13" class="toc-item">Q13: 设计权衡</a>
+        <a href="#q14" class="toc-item">Q14: 面试高频问题</a>
+        <a href="#q15" class="toc-item">Q15: 局限与改进</a>
+      </ul>
+    </nav>
+
+    <div class="section" id="section-background">
+      <div class="chapter-label">问题背景</div>
+      <h2>为什么需要记忆系统？</h2>
+
+      <!-- Q1 -->
+      <div class="question-block" id="q1">
+        <div class="question-header">
+          <div class="question-number">Q1</div>
+          <div class="question-title">AI 代理面临的核心问题是什么？Agent Memory 想解决什么？</div>
+        </div>
+        <div class="question-content">
+          <h4>问题背景</h4>
+          <p>AI 代理（Agent）在处理长对话、长任务时面临两个根本矛盾：</p>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>矛盾</th>
+                  <th>表现</th>
+                  <th>后果</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>上下文遗忘</strong></td>
+                  <td>LLM 的 context window 有限</td>
+                  <td>早期信息被后续对话挤出，历史细节丢失</td>
+                </tr>
+                <tr>
+                  <td><strong>上下文膨胀</strong></td>
+                  <td>记忆越多 → token 越多 → 成本越高</td>
+                  <td>长对话变得不可用，性能下降</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>举个例子</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">conversation.log</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre>用户第1轮：我用的是 Mac + VSCode
+用户第5轮：我习惯用 tabs 不是 spaces
+用户第20轮：（Agent 忘记了 Mac 这个事实，开始建议 Windows 方案）</pre>
+            </div>
+          </div>
+
+          <div class="callout warning">
+            <div class="callout-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              长对话的代价
+            </div>
+            <div class="callout-content">
+              用户持续对话 100 轮 → 每次都把完整历史塞进 context → 50 万 token → LLM 开始"忘记"近期指令 → 推理变慢、幻觉增加
+            </div>
+          </div>
+
+          <h4>Agent Memory 的解决思路</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                  <polyline points="2 17 12 22 22 17"/>
+                  <polyline points="2 12 12 17 22 12"/>
+                </svg>
+              </div>
+              <div class="key-point-content">
+                <div class="key-point-title">分层记忆</div>
+                <div class="key-point-text">把记忆分成四层，按重要性递增</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                </svg>
+              </div>
+              <div class="key-point-content">
+                <div class="key-point-title">符号化压缩</div>
+                <div class="key-point-text">用 Mermaid 等紧凑格式替代自然语言</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </div>
+              <div class="key-point-content">
+                <div class="key-point-title">按需召回</div>
+                <div class="key-point-text">不是每次都加载全部记忆，而是智能检索</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>实际效果</h4>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Token 消耗</div>
+              <div class="stat-value">-61%</div>
+              <div class="stat-change positive">221M → 85M</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">任务通过率</div>
+              <div class="stat-value">+52%</div>
+              <div class="stat-change positive">33% → 50%</div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p style="margin-top: var(--space-md);">Mermaid 用符号替代自然语言：</p>
-      <div style="font-family: var(--font-mono); font-size: 9px; background: var(--c-cream-deep); padding: var(--space-sm); border-radius: 4px; white-space: pre; line-height: 1.3;">
-A[需求] → B[搜索] → C[代码]
-C → D{检查} →|失败| E[修复]
-D →|成功| F[测试]</div>
-      <div class="key-insight">500 字符替代 26KB → 压缩率 98%</div>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <rect x="30" y="20" width="140" height="60" rx="4" fill="#DDD8D2"/>
-        <text x="100" y="40" text-anchor="middle" fill="#444" font-size="8">工具日志</text>
-        <text x="100" y="55" text-anchor="middle" fill="#444" font-size="7">26KB</text>
-        <text x="100" y="70" text-anchor="middle" fill="#a03b00" font-size="6">6500 tokens</text>
-        <path d="M 100 80 L 100 110" stroke="#444" stroke-width="2" marker-end="url(#arrow2)"/>
-        <defs>
-          <marker id="arrow2" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
-            <polygon points="0,0 6,3 0,6" fill="#444"/>
-          </marker>
-        </defs>
-        <rect x="50" y="115" width="100" height="50" rx="4" fill="#5a6e8a"/>
-        <text x="100" y="135" text-anchor="middle" fill="#fff" font-size="8">Mermaid</text>
-        <text x="100" y="150" text-anchor="middle" fill="#fff" font-size="7">500 chars</text>
-        <text x="100" y="165" text-anchor="middle" fill="#4a7c59" font-size="6">98% 压缩</text>
-      </svg>
-    `,
-    inset: "符号压缩"
-  },
-  {
-    label: "Q6: Pipeline 调度",
-    headline: "Pipeline 调度<br><span class="headline-serif">差异化定时器</span>",
-    body: `
-      <span class="question-tag">为什么需要不同的定时器策略</span>
-      <table class="compare-table">
-        <tr><th>层级</th><th>时效性</th><th>触发频率</th><th>定时器类型</th></tr>
-        <tr><td>L1</td><td>中等</td><td>高</td><td>可重置防抖</td></tr>
-        <tr><td>L2</td><td>较低</td><td>中</td><td>只早定时器</td></tr>
-        <tr><td>L3</td><td>低</td><td>低</td><td>全局互斥队列</td></tr>
-      </table>
-      <div class="answer-block" style="margin-top: var(--space-lg);">
-        <p><strong>Warm-up 机制：</strong></p>
-        <p style="font-family: var(--font-mono); font-size: 11px;">新 session: 1 → 2 → 4 → 8</p>
-        <p style="font-size: 11px;">成熟 session: 阈值 8，避免频繁调用</p>
+
+      <!-- Q2 -->
+      <div class="question-block" id="q2">
+        <div class="question-header">
+          <div class="question-number">Q2</div>
+          <div class="question-title">为什么传统的"向量检索 + RAG"方案不够用？</div>
+        </div>
+        <div class="question-content">
+          <h4>传统 RAG 的问题</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">traditional_rag.py</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre>用户查询 → 向量数据库 → 返回 top-k 相关片段 → 塞进 context</pre>
+            </div>
+          </div>
+
+          <p>这种方法有三个根本缺陷：</p>
+
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-amber);">1</div>
+              <div class="key-point-content">
+                <div class="key-point-title">召回是"盲搜索"</div>
+                <div class="key-point-text">向量相似度 ≠ 语义相关性，更不等于"对当前任务有用的上下文"</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-amber);">2</div>
+              <div class="key-point-content">
+                <div class="key-point-title">缺乏宏观结构</div>
+                <div class="key-point-text">用户偏好、工作习惯、沟通风格这些高层信息被切碎成孤立片段</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-amber);">3</div>
+              <div class="key-point-content">
+                <div class="key-point-title">无法追溯</div>
+                <div class="key-point-text">Agent 无法回答"你怎么知道的？"——不知道结论来自哪个记忆</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>向量库的困境</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">vector_store_example.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment"># 向量库里的内容：</span>
+<span class="string">"用户喜欢用 tabs"</span>  <span class="comment">// 来自第3轮</span>
+<span class="string">"用户用 Mac"</span>       <span class="comment">// 来自第1轮</span>
+<span class="string">"用户反馈代码不规范"</span> <span class="comment">// 来自第7轮</span>
+<span class="string">"用户说调试困难"</span>    <span class="comment">// 来自第12轮</span>
+
+<span class="comment"># Agent 无法推断：</span>
+<span class="comment">// 用户是 Mac + tabs 的开发者，对代码规范性敏感。</span></pre>
+            </div>
+          </div>
+        </div>
       </div>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <rect x="20" y="30" width="160" height="25" rx="4" fill="#5a6e8a"/>
-        <text x="100" y="47" text-anchor="middle" fill="#fff" font-size="8">L1: 防抖定时器</text>
-        <text x="170" y="47" text-anchor="end" fill="#EBE8E3" font-size="6">空闲N秒触发</text>
-        <rect x="20" y="65" width="160" height="25" rx="4" fill="#7b6b8a"/>
-        <text x="100" y="82" text-anchor="middle" fill="#fff" font-size="8">L2: 只早定时器</text>
-        <text x="170" y="82" text-anchor="end" fill="#EBE8E3" font-size="6">只能提前</text>
-        <rect x="20" y="100" width="160" height="25" rx="4" fill="#4a7c59"/>
-        <text x="100" y="117" text-anchor="middle" fill="#fff" font-size="8">L3: 串行队列</text>
-        <text x="170" y="117" text-anchor="end" fill="#EBE8E3" font-size="6">避免并发</text>
-        <rect x="20" y="140" width="160" height="30" rx="4" fill="#DDD8D2"/>
-        <text x="100" y="155" text-anchor="middle" fill="#444" font-size="7">Warm-up: 1→2→4→8</text>
-        <text x="100" y="168" text-anchor="middle" fill="#666" font-size="6">快速建立记忆</text>
-      </svg>
-    `,
-    inset: "调度策略"
-  },
-  {
-    label: "Q8: 双通道注入",
-    headline: "双通道召回<br><span class="headline-serif">Prompt Cache 优化</span>",
-    body: `
-      <span class="question-tag">为什么不能都用 system prompt</span>
-      <div class="answer-block">
-        <p><strong>appendSystemContext</strong> — 静态信息 → system prompt 后</p>
-        <p>✓ 可缓存，LLM 推理高效 | ✗ 变化时需重建缓存</p>
+    </div>
+
+    <div class="section" id="section-layers">
+      <div class="chapter-label">核心设计</div>
+      <h2>四层记忆系统详解</h2>
+
+      <!-- Q3 -->
+      <div class="question-block" id="q3">
+        <div class="question-header">
+          <div class="question-number">Q3</div>
+          <div class="question-title">四层记忆（L0/L1/L2/L3）的设计思路是什么？</div>
+        </div>
+        <div class="question-content">
+          <h4>核心思想：渐进式抽象</h4>
+
+          <div class="architecture-diagram">
+            <div class="layer-stack">
+              <div class="layer-row">
+                <div class="layer-badge-large l0">L0</div>
+                <div class="layer-bar l0">
+                  <span class="layer-bar-content">原始对话 —— 证据层（100% 原始）</span>
+                </div>
+              </div>
+              <div class="layer-row">
+                <div class="layer-badge-large l1">L1</div>
+                <div class="layer-bar l1">
+                  <span class="layer-bar-content">原子记忆 —— 结构化层（70% 抽象）</span>
+                </div>
+              </div>
+              <div class="layer-row">
+                <div class="layer-badge-large l2">L2</div>
+                <div class="layer-bar l2">
+                  <span class="layer-bar-content">场景块 —— 主题层（40% 抽象）</span>
+                </div>
+              </div>
+              <div class="layer-row">
+                <div class="layer-badge-large l3">L3</div>
+                <div class="layer-bar l3">
+                  <span class="layer-bar-content">画像 —— 画像层（10% 抽象）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="quote-block">
+            <p>类比人类记忆：L0 像大脑中的"录像带"——完整但无法全部回忆；L3 像大脑中的"刻板印象"——最精炼但可能失真；中间层提供平衡：足够抽象以节省空间，又保留足够细节。</p>
+          </div>
+
+          <!-- L0 -->
+          <div style="margin-top: 40px;">
+            <div class="layer-indicator l0">
+              <span>L0</span>
+              对话原始层 —— "不可篡改的证据"
+            </div>
+            <h4>职责</h4>
+            <p>原始对话存档，类似"行车记录仪"。用于 LLM 在召回过程中可能"污染"对话时的验证，需要原始文本用于审计和追溯，极端情况下可以重建整个对话历史。</p>
+
+            <h4>数据格式</h4>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-filename">L0/conversations/sess_abc123.jsonl</span>
+                <div class="code-dots">
+                  <span class="code-dot red"></span>
+                  <span class="code-dot yellow"></span>
+                  <span class="code-dot green"></span>
+                </div>
+              </div>
+              <div class="code-content">
+<pre>{"sessionKey":"sess_abc123","role":"user","content":"帮我写个排序算法","timestamp":1716200000}
+{"sessionKey":"sess_abc123","role":"assistant","content":"这是一个快速排序实现...","timestamp":1716200010}
+{"sessionKey":"sess_abc123","role":"tool","content":"代码执行完成，输出：[1,2,3,5]","timestamp":1716200020}</pre>
+              </div>
+            </div>
+
+            <h4>关键设计点</h4>
+            <div class="key-points">
+              <div class="key-point">
+                <div class="key-point-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                </div>
+                <div class="key-point-content">
+                  <div class="key-point-title">增量游标（lastCursor）</div>
+                  <div class="key-point-text">避免重复捕获，记录上次读取到的位置</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div class="key-point-content">
+                  <div class="key-point-title">originalUserText</div>
+                  <div class="key-point-text">保留用户原始输入，因为召回时可能替换了用户消息</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                </div>
+                <div class="key-point-content">
+                  <div class="key-point-title">sanitize 机制</div>
+                  <div class="key-point-text">过滤 &lt;injected&gt; 标签和 tool_call 等内部指令，防止注入污染</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- L1 -->
+          <div style="margin-top: 40px;">
+            <div class="layer-indicator l1">
+              <span>L1</span>
+              原子结构化层 —— "LLM 提取的关键事实"
+            </div>
+            <h4>三种记忆类型</h4>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-filename">l1-record-types.ts</span>
+                <div class="code-dots">
+                  <span class="code-dot red"></span>
+                  <span class="code-dot yellow"></span>
+                  <span class="code-dot green"></span>
+                </div>
+              </div>
+              <div class="code-content">
+<pre><span class="comment">// 1. persona（画像类）- 关于用户本身的信息</span>
+{
+  <span class="keyword">type</span>: <span class="string">"persona"</span>,
+  <span class="keyword">content</span>: <span class="string">"用户是 Mac 用户，习惯用 tabs 缩进"</span>,
+  <span class="keyword">extracted_from</span>: <span class="string">"sess_abc123:line_15-20"</span>
+}
+
+<span class="comment">// 2. episodic（事件类）- 发生过的事件</span>
+{
+  <span class="keyword">type</span>: <span class="string">"episodic"</span>,
+  <span class="keyword">content</span>: <span class="string">"用户上周遇到数据库连接池耗尽问题"</span>,
+  <span class="keyword">extracted_from</span>: <span class="string">"sess_xyz789:line_50-80"</span>
+}
+
+<span class="comment">// 3. instruction（指令类）- 用户给出的明确规则</span>
+{
+  <span class="keyword">type</span>: <span class="string">"instruction"</span>,
+  <span class="keyword">content</span>: <span class="string">"用户要求所有 API 必须有 OpenAPI 文档"</span>,
+  <span class="keyword">extracted_from</span>: <span class="string">"sess_abc123:line_10"</span>
+}</pre>
+              </div>
+            </div>
+
+            <h4>提取过程</h4>
+            <div class="workflow-container">
+              <div class="workflow-step">
+                <div class="workflow-number">1</div>
+                <div class="workflow-content">
+                  <div class="workflow-title">过滤低价值消息</div>
+                  <div class="workflow-desc">长度 < 50 字符、工具调用日志、系统消息、被注入的内容</div>
+                </div>
+              </div>
+              <div class="workflow-step">
+                <div class="workflow-number">2</div>
+                <div class="workflow-content">
+                  <div class="workflow-title">调用 LLM 提取</div>
+                  <div class="workflow-desc">根据过滤后的对话内容，使用 LLM 提取关键记忆</div>
+                </div>
+              </div>
+              <div class="workflow-step">
+                <div class="workflow-number">3</div>
+                <div class="workflow-content">
+                  <div class="workflow-title">解析 + 两阶段去重</div>
+                  <div class="workflow-desc">解析 LLM 输出，执行去重和合并操作</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- L2 -->
+          <div style="margin-top: 40px;">
+            <div class="layer-indicator l2">
+              <span>L2</span>
+              场景聚合层 —— "主题化的记忆块"
+            </div>
+            <h4>为什么需要场景聚合？</h4>
+            <p>假设 L1 有 100 条记忆，直接召回会导致：</p>
+            <div class="callout info">
+              <div class="callout-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                Token 消耗对比
+              </div>
+              <div class="callout-content">
+                直接召回：100 条 L1 × 50 tokens = <strong>5000 tokens</strong><br>
+                按场景召回：5 个场景 × 100 tokens = <strong>500 tokens（-90%）</strong>
+              </div>
+            </div>
+
+            <h4>场景示例</h4>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-filename">L2/scene_blocks/database-optimization.md</span>
+                <div class="code-dots">
+                  <span class="code-dot red"></span>
+                  <span class="code-dot yellow"></span>
+                  <span class="code-dot green"></span>
+                </div>
+              </div>
+              <div class="code-content">
+<pre><span class="comment"># 场景：数据库优化项目</span>
+
+<span class="keyword">## 背景</span>
+用户正在进行一个性能敏感的项目，涉及数据库查询优化。
+
+<span class="keyword">## 已知信息</span>
+<span class="comment">- 项目使用 PostgreSQL 12</span>
+<span class="comment">- 用户反馈查询延迟高达 5s</span>
+<span class="comment">- 已实施的优化：索引、连接池、缓存</span>
+
+<span class="keyword">## 相关 L1 记录</span>
+<span class="comment">- record_001: 用户提到使用 PostgreSQL</span>
+<span class="comment">- record_042: 反馈查询慢的问题</span>
+<span class="comment">- record_089: 提到添加了索引</span>
+
+<span class="keyword">## 时间线</span>
+2024-03-01: 开始项目
+2024-03-05: 反馈性能问题
+2024-03-10: 添加索引，延迟降到 1s
+
+<span class="keyword">## 状态</span>
+[进行中]</pre>
+              </div>
+            </div>
+
+            <h4>LLM Agent 自主操作场景</h4>
+            <div class="key-points">
+              <div class="key-point">
+                <div class="key-point-icon">+</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">CREATE_SCENE</div>
+                  <div class="key-point-text">创建新场景</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon">✎</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">UPDATE_SCENE</div>
+                  <div class="key-point-text">更新场景内容</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon">⊕</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">MERGE_SCENES</div>
+                  <div class="key-point-text">合并两个场景</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon">×</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">DELETE_SCENE</div>
+                  <div class="key-point-text">软删除场景（标记 [DELETED]）</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- L3 -->
+          <div style="margin-top: 40px;">
+            <div class="layer-indicator l3">
+              <span>L3</span>
+              用户画像层 —— "最高层次的抽象"
+            </div>
+            <h4>为什么需要画像？</h4>
+            <div class="callout info">
+              <div class="callout-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                性能对比
+              </div>
+              <div class="callout-content">
+                每次对话检索：100ms+，500 tokens<br>
+                画像直接读取：10ms，200 tokens（<strong>-60%</strong>）
+              </div>
+            </div>
+
+            <h4>画像示例</h4>
+            <div class="code-block">
+              <div class="code-header">
+                <span class="code-filename">L3/persona.md</span>
+                <div class="code-dots">
+                  <span class="code-dot red"></span>
+                  <span class="code-dot yellow"></span>
+                  <span class="code-dot green"></span>
+                </div>
+              </div>
+              <div class="code-content">
+<pre><span class="comment"># 用户画像</span>
+
+<span class="keyword">## 身份背景</span>
+<span class="comment">- 主要语言：Python、TypeScript</span>
+<span class="comment">- 工作环境：Mac + VSCode</span>
+<span class="comment">- 领域：后端开发、数据工程</span>
+
+<span class="keyword">## 偏好习惯</span>
+<span class="comment">- 缩进：tabs（明确偏好）</span>
+<span class="comment">- 文档：必须有 docstring</span>
+<span class="comment">- 代码风格：PEP8、Google style guide</span>
+
+<span class="keyword">## 沟通风格</span>
+<span class="comment">- 简洁直接，不喜欢废话</span>
+<span class="comment">- 喜欢代码示例而非长篇解释</span>
+<span class="comment">- 会主动追问细节</span>
+
+<span class="keyword">## 工作方式</span>
+<span class="comment">- 习惯 TDD（先写测试）</span>
+<span class="comment">- 使用 Git Flow 分支模型</span>
+<span class="comment">- 重视 CI/CD 自动化</span></pre>
+              </div>
+            </div>
+
+            <h4>生成时机</h4>
+            <div class="key-points">
+              <div class="key-point">
+                <div class="key-point-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">1</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">首次场景提取完成</div>
+                  <div class="key-point-text">sceneCount === 1 时触发</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">2</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">画像文件缺失/损坏</div>
+                  <div class="key-point-text">需要重新生成</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">3</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">累计新增记忆达到阈值</div>
+                  <div class="key-point-text">newRecordsSinceLastGen >= L3_TRIGGER_THRESHOLD</div>
+                </div>
+              </div>
+              <div class="key-point">
+                <div class="key-point-icon" style="background: rgba(163, 113, 247, 0.15); color: var(--accent-purple);">4</div>
+                <div class="key-point-content">
+                  <div class="key-point-title">L2 显式请求</div>
+                  <div class="key-point-text">检查 pendingPersonaUpdateRequest</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="answer-block">
-        <p><strong>prependContext</strong> — 动态信息 → 用户消息前</p>
-        <p>✓ 每轮灵活变化 | ✗ 无法利用 prompt cache</p>
-      </div>
-      <table class="compare-table" style="margin-top: var(--space-lg);">
-        <tr><th>通道</th><th>目标</th><th>缓存策略</th></tr>
-        <tr><td>System</td><td>静态/稳定信息</td><td>长期缓存</td></tr>
-        <tr><td>User 前</td><td>动态/近期信息</td><td>不缓存</td></tr>
-      </table>
-      <div class="key-insight">RRF 融合：keyword + embedding + hybrid 三策略协同</div>
-    `,
-    visual: `
-      <svg viewBox="0 0 200 200">
-        <rect x="30" y="20" width="140" height="30" rx="4" fill="#DDD8D2"/>
-        <text x="100" y="40" text-anchor="middle" fill="#444" font-size="8">System Prompt</text>
-        <rect x="30" y="55" width="140" height="22" rx="3" fill="#DDD8D2" opacity="0.8"/>
-        <text x="100" y="70" text-anchor="middle" fill="#444" font-size="7">L2 Scene + L3 Persona</text>
-        <rect x="30" y="82" width="140" height="18" rx="3" fill="#DDD8D2" opacity="0.6"/>
-        <text x="100" y="95" text-anchor="middle" fill="#444" font-size="6">L1 Static</text>
-        <rect x="30" y="110" width="140" height="18" rx="3" fill="#6B655F" opacity="0.5"/>
-        <text x="100" y="123" text-anchor="middle" fill="#444" font-size="6">Cache Zone</text>
-        <line x1="20" y1="65" x2="30" y2="65" stroke="#4a7c59" stroke-width="2"/>
-        <rect x="30" y="135" width="140" height="22" rx="4" fill="#a03b00"/>
-        <text x="100" y="150" text-anchor="middle" fill="#fff" font-size="7">User Message</text>
-        <line x1="20" y1="146" x2="30" y2="146" stroke="#a03b00" stroke-width="2"/>
-        <rect x="30" y="162" width="140" height="18" rx="3" fill="#5a6e8a"/>
-        <text x="100" y="175" text-anchor="middle" fill="#fff" font-size="6">L1 Dynamic</text>
-        <text x="100" y="195" text-anchor="middle" fill="#666" font-size="6">Dynamic Zone</text>
-      </svg>
-    `,
-    inset: "召回通道"
+
+      <!-- Q4 -->
+      <div class="question-block" id="q4">
+        <div class="question-header">
+          <div class="question-number">Q4</div>
+          <div class="question-title">四层之间的"钻取链路"是如何工作的？</div>
+        </div>
+        <div class="question-content">
+          <h4>核心机制：按需降级召回</h4>
+
+          <div class="workflow-container">
+            <div class="workflow-step">
+              <div class="workflow-number">1</div>
+              <div class="workflow-content">
+                <div class="workflow-title">查询 L3 画像</div>
+                <div class="workflow-desc">用户问："我上次那个数据库项目后来怎么优化的？"</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number">2</div>
+              <div class="workflow-content">
+                <div class="workflow-title">查 L2 场景</div>
+                <div class="workflow-desc">找到"数据库优化项目"场景</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number">3</div>
+              <div class="workflow-content">
+                <div class="workflow-title">获取相关 L1 记录</div>
+                <div class="workflow-desc">从场景获取相关 L1 记录 ID</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number">4</div>
+              <div class="workflow-content">
+                <div class="workflow-title">追溯 L0（如需要）</div>
+                <div class="workflow-desc">可选：获取原始对话</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>层级对比</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>层级</th>
+                  <th>检索速度</th>
+                  <th>信息精度</th>
+                  <th>Token 消耗</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="layer-badge l0" style="margin-right: 8px;">L0</span>原始层</td>
+                  <td>慢（全量扫描）</td>
+                  <td>最高（原始）</td>
+                  <td>高</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l1" style="margin-right: 8px;">L1</span>原子层</td>
+                  <td>中（向量/关键词）</td>
+                  <td>高</td>
+                  <td>中</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l2" style="margin-right: 8px;">L2</span>场景层</td>
+                  <td>快（按场景）</td>
+                  <td>中</td>
+                  <td>低</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l3" style="margin-right: 8px;">L3</span>画像层</td>
+                  <td>最快（固定文件）</td>
+                  <td>低（摘要）</td>
+                  <td>最低</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>result_ref 链接实现追溯</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">l1-record.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">interface</span> <span class="function">L1Record</span> {
+  <span class="keyword">id</span>: <span class="keyword">string</span>
+  <span class="keyword">content</span>: <span class="keyword">string</span>
+  <span class="keyword">type</span>: MemoryType
+  <span class="keyword">result_ref</span>: {
+    <span class="comment">// 可以追溯到 L0 原始对话</span>
+    l0_session: <span class="keyword">string</span>
+    l0_line_range: [<span class="keyword">number</span>, <span class="keyword">number</span>]
+    <span class="comment">// 可以追溯到 L2 场景</span>
+    l2_scene_id?: <span class="keyword">string</span>
   }
-];
+}</pre>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-let currentChapter = 0;
+    <div class="section" id="section-mermaid">
+      <div class="chapter-label">压缩技术</div>
+      <h2>Mermaid 画布与符号化压缩</h2>
 
-function renderChapter(index) {
-  const chapter = chapters[index];
-  document.getElementById('header-label').textContent = chapter.label;
-  document.getElementById('headline').innerHTML = chapter.headline;
-  document.getElementById('body-text').innerHTML = chapter.body;
-  document.getElementById('visual-object').innerHTML = chapter.visual;
-  document.getElementById('visual-inset').textContent = chapter.inset;
-  document.getElementById('chapter-indicator').textContent = `Chapter ${index + 1} of ${chapters.length}`;
+      <!-- Q5 -->
+      <div class="question-block" id="q5">
+        <div class="question-header">
+          <div class="question-number">Q5</div>
+          <div class="question-title">为什么要用 Mermaid 做短期记忆？解决了什么问题？</div>
+        </div>
+        <div class="question-content">
+          <h4>问题背景：长任务的 token 杀手</h4>
+          <div class="callout warning">
+            <div class="callout-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+              工具调用日志消耗
+            </div>
+            <div class="callout-content">
+              一个典型的长任务可能产生：搜索结果 5KB + 代码内容 10KB + 错误栈 3KB + 执行输出 8KB = <strong>26KB ≈ 6500 tokens</strong><br>
+              100 轮对话：6500 × 100 = <strong>650,000 tokens（仅工具日志）</strong>
+            </div>
+          </div>
 
-  const pagination = document.getElementById('pagination');
-  pagination.innerHTML = chapters.map((_, i) =>
-    `<span class="dot ${i === index ? 'active' : ''}" onclick="goToChapter(${i})"></span>`
-  ).join('');
+          <h4>Mermaid 画布的解决思路</h4>
+          <p>不是删除这些信息，而是用高密度符号表示：</p>
 
-  const prevBtn = document.getElementById('nav-prev');
-  prevBtn.textContent = index > 0 ? '← Prev' : '';
-  prevBtn.style.visibility = index > 0 ? 'visible' : 'hidden';
+          <div class="mermaid-wrapper">
+            <div class="mermaid-diagram">
+              <div class="flow-step">
+                <div class="mermaid-node primary">用户需求</div>
+                <span class="mermaid-arrow">→</span>
+                <div class="mermaid-node secondary">搜索文档</div>
+              </div>
+              <div class="flow-step">
+                <div class="mermaid-arrow" style="margin-left: 40px;">→</div>
+                <div class="mermaid-node secondary">生成代码</div>
+              </div>
+              <div class="flow-step">
+                <div class="mermaid-arrow" style="margin-left: 40px;">→</div>
+                <div class="mermaid-node decision">编译<br>检查</div>
+              </div>
+              <div class="flow-step" style="justify-content: center; gap: 60px;">
+                <div style="text-align: center;">
+                  <span style="color: var(--accent-pink);">失败</span>
+                  <div class="mermaid-arrow">↓</div>
+                  <div class="mermaid-node secondary" style="background: rgba(247, 120, 186, 0.1); border-color: rgba(247, 120, 186, 0.3); color: var(--accent-pink);">修复错误</div>
+                </div>
+                <div style="text-align: center;">
+                  <span style="color: var(--accent-teal);">成功</span>
+                  <div class="mermaid-arrow">↓</div>
+                  <div class="mermaid-node secondary">运行测试</div>
+                </div>
+              </div>
+              <div class="flow-step" style="justify-content: center; gap: 60px;">
+                <div style="text-align: center;">
+                  <span style="color: var(--accent-pink);">未通过</span>
+                  <div class="mermaid-arrow">↓</div>
+                  <div class="mermaid-node secondary" style="background: rgba(247, 120, 186, 0.1); border-color: rgba(247, 120, 186, 0.3); color: var(--accent-pink);">调试</div>
+                </div>
+                <div style="text-align: center;">
+                  <span style="color: var(--accent-teal);">通过</span>
+                  <div class="mermaid-arrow">↓</div>
+                  <div class="mermaid-node success">完成</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-  document.getElementById('scroll-content').scrollTop = 0;
-}
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">原文大小</div>
+              <div class="stat-value">26KB</div>
+              <div class="stat-change">26,000 字符</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Mermaid 大小</div>
+              <div class="stat-value">500B</div>
+              <div class="stat-change">500 字符</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">压缩率</div>
+              <div class="stat-value">98%</div>
+              <div class="stat-change positive">大幅节省 token</div>
+            </div>
+          </div>
 
-function goToChapter(index) {
-  currentChapter = index;
-  renderChapter(currentChapter);
-}
+          <h4>Token 降低 61% 的技术分解</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>技术</th>
+                  <th>贡献占比</th>
+                  <th>说明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Mermaid 符号化</td>
+                  <td><strong>40%</strong></td>
+                  <td>状态转移图替代文字描述</td>
+                </tr>
+                <tr>
+                  <td>工具结果外化</td>
+                  <td><strong>35%</strong></td>
+                  <td>原始日志 offload，只保留引用</td>
+                </tr>
+                <tr>
+                  <td>分层召回</td>
+                  <td><strong>15%</strong></td>
+                  <td>按需加载，非全量上下文</td>
+                </tr>
+                <tr>
+                  <td>向量索引</td>
+                  <td><strong>10%</strong></td>
+                  <td>精准检索，避免无效传递</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-function nextChapter() {
-  if (currentChapter < chapters.length - 1) {
-    currentChapter++;
-    renderChapter(currentChapter);
+          <h4>三层压缩策略</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: var(--glow-cyan); color: var(--accent-cyan);">M</div>
+              <div class="key-point-content">
+                <div class="key-point-title">Mild（保守）</div>
+                <div class="key-point-text">用 score/result_summary 替换原始结果，保留可追溯性。示例：10KB 搜索结果 → "搜索了 Python 相关文档，返回 20 个结果"</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-amber);">A</div>
+              <div class="key-point-content">
+                <div class="key-point-title">Aggressive（激进）</div>
+                <div class="key-point-text">删除超过 N 轮的历史消息，释放空间。注意：不可恢复</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(247, 120, 186, 0.15); color: var(--accent-pink);">E</div>
+              <div class="key-point-content">
+                <div class="key-point-title">Emergency（紧急）</div>
+                <div class="key-point-text">优先保护用户消息，只压缩 Agent 消息和工具输出。触发条件：token 即将超出 context limit</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="section-pipeline">
+      <div class="chapter-label">调度机制</div>
+      <h2>Pipeline 调度与 Warm-up</h2>
+
+      <!-- Q6 -->
+      <div class="question-block" id="q6">
+        <div class="question-header">
+          <div class="question-number">Q6</div>
+          <div class="question-title">L1/L2/L3 的调度为什么需要不同的定时器策略？</div>
+        </div>
+        <div class="question-content">
+          <h4>背景：不同层级的时效性要求不同</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>层级</th>
+                  <th>时效性要求</th>
+                  <th>触发频率</th>
+                  <th>适合的定时器类型</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="layer-badge l1" style="margin-right: 4px;">L1</span></td>
+                  <td>中等</td>
+                  <td>高</td>
+                  <td><strong>可重置防抖</strong></td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l2" style="margin-right: 4px;">L2</span></td>
+                  <td>较低</td>
+                  <td>中</td>
+                  <td><strong>只早定时器</strong></td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l3" style="margin-right: 4px;">L3</span></td>
+                  <td>低</td>
+                  <td>低</td>
+                  <td><strong>全局互斥</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>L1：可重置定时器（防抖）</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">resettable-timer.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">class</span> <span class="function">ResettableTimer</span> {
+  <span class="keyword">private</span> timer: NodeJS.Timer | <span class="keyword">null</span> = <span class="keyword">null</span>
+  <span class="keyword">private</span> timeout: <span class="keyword">number</span>
+
+  <span class="function">constructor</span>(timeout: <span class="keyword">number</span>) {
+    <span class="keyword">this</span>.timeout = timeout
+  }
+
+  <span class="comment">// 对话时重置倒计时</span>
+  <span class="function">reset</span>(): <span class="keyword">void</span> {
+    <span class="keyword">if</span> (<span class="keyword">this</span>.timer) clearTimeout(<span class="keyword">this</span>.timer)
+    <span class="keyword">this</span>.timer = setTimeout(() => {
+      <span class="keyword">this</span>.onTrigger()  <span class="comment">// 触发 L1 提取</span>
+    }, <span class="keyword">this</span>.timeout)
+  }
+
+  <span class="comment">// 取消定时器</span>
+  <span class="function">cancel</span>(): <span class="keyword">void</span> {
+    <span class="keyword">if</span> (<span class="keyword">this</span>.timer) clearTimeout(<span class="keyword">this</span>.timer)
   }
 }
 
-function prevChapter() {
-  if (currentChapter > 0) {
-    currentChapter--;
-    renderChapter(currentChapter);
+<span class="comment">// 使用示例</span>
+<span class="keyword">const</span> l1Timer = <span class="keyword">new</span> <span class="function">ResettableTimer</span>(<span class="number">60_000</span>)  <span class="comment">// 60秒防抖</span>
+
+<span class="comment">// 用户持续对话时不断重置</span>
+onUserMessage(() => l1Timer.<span class="function">reset</span>())
+
+<span class="comment">// 只有空闲 60 秒后才触发 L1 提取</span></pre>
+              </div>
+          </div>
+
+          <h4>L2：只早定时器（downward-only）</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">downward-only-timer.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">class</span> <span class="function">DownwardOnlyTimer</span> {
+  <span class="keyword">private</span> nextFireTime: Date
+
+  <span class="comment">// 只能提前，不能推迟</span>
+  <span class="comment">// 如果当前设置 30 分钟后触发，收到 L1 通知后可以提前到 5 分钟后</span>
+  <span class="comment">// 但已经设置 5 分钟触发后，不能改成 30 分钟</span>
+  <span class="function">fireEarlier</span>(newTime: Date): <span class="keyword">void</span> {
+    <span class="keyword">if</span> (newTime < <span class="keyword">this</span>.nextFireTime) {
+      <span class="keyword">this</span>.nextFireTime = newTime
+      <span class="keyword">this</span>.reschedule()
+    }
+    <span class="comment">// 如果 newTime > this.nextFireTime，忽略</span>
+  }
+}</pre>
+              </div>
+          </div>
+
+          <h4>L3：全局互斥队列</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">serial-queue.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment">// L3 生成是重量级操作</span>
+<span class="comment">// 并发生成可能导致文件损坏</span>
+<span class="keyword">const</span> l3Queue = <span class="keyword">new</span> <span class="function">SerialQueue</span>()
+
+<span class="comment">// 所有 L3 生成请求都排队</span>
+<span class="keyword">await</span> l3Queue.<span class="function">enqueue</span>(() => <span class="function">generatePersona</span>())
+
+<span class="comment">// 并发场景：</span>
+<span class="comment">// Task A: 读取 persona.md → 追加更新 → 写入</span>
+<span class="comment">// Task B: 读取 persona.md（读取到 A 的中间状态）→ 追加更新 → 写入</span>
+<span class="comment">// 结果：Task A 的更新丢失</span></pre>
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q7 -->
+      <div class="question-block" id="q7">
+        <div class="question-header">
+          <div class="question-number">Q7</div>
+          <div class="question-title">Warm-up 机制是如何工作的？为什么新 session 要快速触发？</div>
+        </div>
+        <div class="question-content">
+          <h4>问题：冷启动问题</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">cold-start-problem.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment">// 新 session 开始时</span>
+对话 1: "帮我写个排序算法"
+对话 2: "加上类型注解"
+对话 3: "测试用例呢"
+对话 4: "我其实更关心性能，能用 C++ 吗"  ← Agent 忘记了对话 1 的上下文
+
+<span class="comment">// 理想情况：对话 2-4 应该触发 L1 提取</span>
+<span class="comment">// 但如果阈值是 8（成熟 session 的阈值）</span>
+<span class="comment">// 对话 1-7 都不会触发提取</span></pre>
+              </div>
+          </div>
+
+          <h4>Warm-up 机制</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">warmup-thresholds.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">class</span> <span class="function">WarmupThresholds</span> {
+  <span class="comment">// 新 session：阈值 = 1（首轮即触发）</span>
+  initial: <span class="number">1</span>
+
+  <span class="comment">// 成功后翻倍：1 → 2 → 4 → 8 → 稳定</span>
+  growthFactor: <span class="number">2</span>
+
+  <span class="comment">// 成熟 session 的最大阈值</span>
+  maxThreshold: <span class="number">8</span>
+}
+
+<span class="comment">// 阈值演变</span>
+<span class="keyword">const</span> thresholds = [
+  { conversations: <span class="number">1</span>, threshold: <span class="number">1</span> },   <span class="comment">// 新 session</span>
+  { conversations: <span class="number">2</span>, threshold: <span class="number">2</span> },   <span class="comment">// 触发后 +1</span>
+  { conversations: <span class="number">3</span>, threshold: <span class="number">4</span> },   <span class="comment">// 触发后 ×2</span>
+  { conversations: <span class="number">4</span>, threshold: <span class="number">8</span> },   <span class="comment">// 触发后 ×2</span>
+  { conversations: <span class="number">5</span>, threshold: <span class="number">8</span> },   <span class="comment">// 达到上限</span>
+]</pre>
+              </div>
+          </div>
+
+          <h4>效果</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: var(--glow-teal); color: var(--accent-teal);">🆕</div>
+              <div class="key-point-content">
+                <div class="key-point-title">新 session</div>
+                <div class="key-point-text">对话 1 → threshold=1 → 立即触发 L1 → 提取"用户要写排序算法，可能需要测试用例" → 对话 4 时，Agent 已经知道上下文</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(139, 148, 158, 0.2); color: var(--text-secondary);">📈</div>
+              <div class="key-point-content">
+                <div class="key-point-title">成熟 session</div>
+                <div class="key-point-text">对话 1-7 → threshold=8 → 不触发 → 对话 8 → 触发一次 L1 提取 → 节省 7 次 LLM 调用</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="section-recall">
+      <div class="chapter-label">召回机制</div>
+      <h2>双通道注入与召回策略</h2>
+
+      <!-- Q8 -->
+      <div class="question-block" id="q8">
+        <div class="question-header">
+          <div class="question-number">Q8</div>
+          <div class="question-title">双通道注入是如何设计的？为什么不能都用 system prompt？</div>
+        </div>
+        <div class="question-content">
+          <h4>背景：Prompt Cache 的挑战</h4>
+          <p>现代 LLM 推理优化（如 GPU 利用率）依赖 <strong>Prompt Cache</strong>：</p>
+          <ul>
+            <li>System prompt + 前 N 轮对话 → 缓存</li>
+            <li>只有新增的用户消息需要重新计算</li>
+          </ul>
+
+          <div class="callout info">
+            <div class="callout-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/>
+                <line x1="9" y1="21" x2="9" y2="9"/>
+              </svg>
+              理想情况
+            </div>
+            <div class="callout-content">
+              <div style="border: 1px solid var(--border-subtle); border-radius: 8px; overflow: hidden;">
+                <div style="background: var(--bg-tertiary); padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); color: var(--accent-teal); font-size: 13px;">[Cached] System Prompt + Persona</div>
+                <div style="background: var(--bg-tertiary); padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); color: var(--accent-teal); font-size: 13px;">[Cached] L2 Scene Context</div>
+                <div style="background: var(--bg-tertiary); padding: 12px 16px; color: var(--accent-teal); font-size: 13px;">[Cached] L1 静态记忆</div>
+                <div style="padding: 12px 16px; border-top: 1px solid var(--border-subtle); color: var(--accent-cyan); font-size: 13px;">[New] User Message + L1 动态记忆</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>双通道注入设计</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: var(--glow-cyan); color: var(--accent-cyan);">S</div>
+              <div class="key-point-content">
+                <div class="key-point-title">appendSystemContext（静态信息 → system prompt 后）</div>
+                <div class="key-point-text"><strong>优点</strong>：可缓存，LLM 推理高效<br><strong>缺点</strong>：变化时需要重建缓存</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(247, 120, 186, 0.15); color: var(--accent-pink);">U</div>
+              <div class="key-point-content">
+                <div class="key-point-title">prependContext（动态信息 → 用户消息前）</div>
+                <div class="key-point-text"><strong>优点</strong>：每轮灵活变化<br><strong>缺点</strong>：无法利用 prompt cache</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q9 -->
+      <div class="question-block" id="q9">
+        <div class="question-header">
+          <div class="question-number">Q9</div>
+          <div class="question-title">三种召回策略（keyword/embedding/hybrid）分别适用什么场景？</div>
+        </div>
+        <div class="question-content">
+          <h4>1. Keyword 召回（FTS5 BM25）</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">keyword_search.sql</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment">-- SQLite FTS5 的 BM25 算法</span>
+<span class="keyword">SELECT</span> content, bm25(fts_table, <span class="string">'query terms'</span>) <span class="keyword">as</span> score
+<span class="keyword">FROM</span> fts_table
+<span class="keyword">WHERE</span> content <span class="function">MATCH</span> <span class="string">'query terms'</span>
+<span class="keyword">ORDER BY</span> score
+<span class="keyword">LIMIT</span> <span class="number">10</span>;</pre>
+              </div>
+          </div>
+          <p><strong>适用场景</strong>：没有 embedding 服务、查询是明确的关键词（如函数名、类名）、需要精确匹配</p>
+
+          <h4>2. Embedding 召回（向量相似度）</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">embedding_search.py</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment"># 用户问："上次那个数据库连接的问题"</span>
+query_embedding = embed_model.<span class="function">encode</span>(<span class="string">"数据库连接问题"</span>)
+
+<span class="comment"># 向量搜索找到：</span>
+<span class="comment">// - "连接池耗尽" (cosine=0.92) ✓</span>
+<span class="comment">// - "max_connections 配置" (cosine=0.88) ✓</span>
+<span class="comment">// - "连接超时" (cosine=0.85) ✓</span></pre>
+              </div>
+          </div>
+          <p><strong>适用场景</strong>：查询是自然语言描述、语义相关但词形不同、有 embedding 服务可用</p>
+
+          <h4>3. Hybrid 召回（RRF 融合）</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">rrf_fusion.py</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">def</span> <span class="function">rrf_fusion</span>(results_keyword, results_embedding, k=<span class="number">60</span>):
+    <span class="comment">"""
+    Reciprocal Rank Fusion
+    k=60 是经验值，平衡排名权重
+    """</span>
+    scores = defaultdict(<span class="keyword">float</span>)
+
+    <span class="comment"># BM25 排名贡献</span>
+    <span class="keyword">for</span> i, doc <span class="keyword">in</span> <span class="function">enumerate</span>(results_keyword):
+        scores[doc.id] += <span class="number">1</span> / (k + i + <span class="number">1</span>)
+
+    <span class="comment"># 向量相似度排名贡献</span>
+    <span class="keyword">for</span> i, doc <span class="keyword">in</span> <span class="function">enumerate</span>(results_embedding):
+        scores[doc.id] += <span class="number">1</span> / (k + i + <span class="number">1</span>)
+
+    <span class="comment"># 按融合分数排序</span>
+    <span class="keyword">return</span> <span class="function">sorted</span>(scores.items(), key=<span class="keyword">lambda</span> x: x[<span class="number">1</span>], reverse=<span class="keyword">True</span>)</pre>
+              </div>
+          </div>
+
+          <h4>推荐配置</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">recall_config.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">const</span> recallConfig = {
+  strategy: <span class="string">"hybrid"</span>,  <span class="comment">// 推荐默认用 hybrid</span>
+  keywordWeight: <span class="number">0.3</span>,
+  embeddingWeight: <span class="number">0.7</span>,
+  rrfK: <span class="number">60</span>,
+  topK: <span class="number">5</span>
+}</pre>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="section-storage">
+      <div class="chapter-label">存储架构</div>
+      <h2>双轨存储与 HostAdapter 模式</h2>
+
+      <!-- Q10 -->
+      <div class="question-block" id="q10">
+        <div class="question-header">
+          <div class="question-number">Q10</div>
+          <div class="question-title">为什么需要双轨存储？SQLite 和 TCVDB 分别适合什么场景？</div>
+        </div>
+        <div class="question-content">
+          <h4>存储需求分析</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>层级</th>
+                  <th>写入</th>
+                  <th>读取</th>
+                  <th>规模</th>
+                  <th>特点</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="layer-badge l0" style="margin-right: 4px;">L0</span></td>
+                  <td>append-only，高频</td>
+                  <td>按 session 查询</td>
+                  <td>10GB+</td>
+                  <td>结构简单，强一致性</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l1" style="margin-right: 4px;">L1</span></td>
+                  <td>批量，低频</td>
+                  <td>向量搜索 + 关键词</td>
+                  <td>100MB-1GB</td>
+                  <td>全文索引 + 向量索引</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l2" style="margin-right: 4px;">L2</span></td>
+                  <td>LLM 增量更新</td>
+                  <td>按标题/标签</td>
+                  <td>10MB-100MB</td>
+                  <td>Markdown 格式</td>
+                </tr>
+                <tr>
+                  <td><span class="layer-badge l3" style="margin-right: 4px;">L3</span></td>
+                  <td>极少（增量）</td>
+                  <td>每次对话前</td>
+                  <td><1MB</td>
+                  <td>单文件，无特殊需求</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>SQLite + sqlite-vec：本地开发/小规模</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: var(--glow-teal); color: var(--accent-teal);">✓</div>
+              <div class="key-point-content">
+                <div class="key-point-title">优势</div>
+                <div class="key-point-text">本地零配置、隐私优先（数据不离开机器）、开发调试方便</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon" style="background: rgba(210, 153, 34, 0.15); color: var(--accent-amber);">△</div>
+              <div class="key-point-content">
+                <div class="key-point-title">限制</div>
+                <div class="key-point-text">向量维度受限、并发写入有限、不适合大规模（>100GB）</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>TCVDB：云端生产环境</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon" style="background: var(--glow-cyan); color: var(--accent-cyan);">🌐</div>
+              <div class="key-point-content">
+                <div class="key-point-title">腾讯云向量数据库</div>
+                <div class="key-point-text">
+                  - 原生 Hybrid Search（向量检索 + 全文检索 + 标量过滤）<br>
+                  - 服务端 Embedding（不需要本地 embedding 模型）<br>
+                  - 弹性扩展（随数据量自动扩缩容）
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h4>存储抽象</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">imemory-store.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">interface</span> <span class="function">IMemoryStore</span> {
+  <span class="comment">// 能力查询</span>
+  getCapabilities(): StoreCapabilities
+
+  <span class="comment">// L1 操作</span>
+  upsertL1(record: L1Record): Promise&lt;<span class="keyword">void</span>&gt;
+  searchL1(params: SearchParams): Promise&lt;L1Result[]&gt;
+
+  <span class="comment">// L0 操作</span>
+  upsertL0(record: L0Record): Promise&lt;<span class="keyword">void</span>&gt;
+  queryL0BySession(sessionId: <span class="keyword">string</span>): Promise&lt;L0Record[]&gt;
+}</pre>
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q11 -->
+      <div class="question-block" id="q11">
+        <div class="question-header">
+          <div class="question-number">Q11</div>
+          <div class="question-title">HostAdapter 模式解决了什么问题？</div>
+        </div>
+        <div class="question-content">
+          <h4>问题：核心逻辑与宿主耦合</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">coupled-design.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment">// 耦合的写法</span>
+<span class="keyword">class</span> <span class="function">TdaiCore</span> {
+  <span class="function">constructor</span>(openclawRuntime: OpenClawRuntime) {
+    <span class="comment">// 直接依赖 OpenClaw</span>
+    <span class="keyword">this</span>.llm = openclawRuntime.<span class="function">getLLM</span>()
+    <span class="keyword">this</span>.context = openclawRuntime.<span class="function">getContext</span>()
   }
 }
 
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); nextChapter(); }
-  else if (e.key === 'ArrowLeft') { e.preventDefault(); prevChapter(); }
-});
+<span class="comment">// 问题：</span>
+<span class="comment">// - 无法独立测试 TdaiCore</span>
+<span class="comment">// - 无法在 Hermes 上复用</span>
+<span class="comment">// - 无法用自定义 LLM 替代</span></pre>
+              </div>
+          </div>
 
-let touchStartX = 0;
-document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
-document.addEventListener('touchend', (e) => {
-  const diff = touchStartX - e.changedTouches[0].clientX;
-  if (Math.abs(diff) > 50) { if (diff > 0) nextChapter(); else prevChapter(); }
-});
+          <h4>HostAdapter 抽象</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">host-adapter-pattern.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="comment">// 抽象接口</span>
+<span class="keyword">interface</span> <span class="function">HostAdapter</span> {
+  getRuntimeContext(): RuntimeContext
+  getLogger(): Logger
+  getLLMRunnerFactory(): LLMRunnerFactory
+}
 
-renderChapter(0);
-</script>
+<span class="comment">// 实现示例</span>
+<span class="keyword">class</span> <span class="function">OpenClawHostAdapter</span> <span class="keyword">implements</span> HostAdapter {
+  <span class="function">getRuntimeContext</span>(): RuntimeContext {
+    <span class="keyword">return</span> {
+      sessionId: <span class="keyword">this</span>.pluginContext.session.key,
+      conversationHistory: <span class="keyword">this</span>.pluginContext.<span class="function">getMessages</span>(),
+      userPreferences: <span class="keyword">this</span>.pluginContext.userPrefs
+    }
+  }
+}
 
+<span class="keyword">class</span> <span class="function">StandaloneHostAdapter</span> <span class="keyword">implements</span> HostAdapter {
+  <span class="function">getRuntimeContext</span>(): RuntimeContext {
+    <span class="keyword">return</span> {
+      sessionId: <span class="keyword">this</span>.httpContext.headers[<span class="string">'x-session-id'</span>],
+      conversationHistory: <span class="keyword">this</span>.httpContext.body.messages,
+      userPreferences: <span class="keyword">this</span>.httpContext.body.preferences
+    }
+  }
+}</pre>
+              </div>
+          </div>
+
+          <h4>好处</h4>
+          <div class="architecture-diagram">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 24px;">
+              <div style="background: var(--glow-cyan); border: 1px solid var(--border-accent); border-radius: 12px; padding: 20px 32px; font-weight: 600; color: var(--accent-cyan);">TdaiCore（核心逻辑）</div>
+              <div style="font-size: 20px; color: var(--text-muted);">↑</div>
+              <div style="text-align: center; color: var(--text-secondary); font-size: 13px;">只依赖 HostAdapter 接口</div>
+              <div style="font-size: 20px; color: var(--text-muted);">↓</div>
+              <div style="background: var(--bg-tertiary); border-radius: 12px; padding: 16px; font-weight: 600; color: var(--text-primary);">HostAdapter</div>
+              <div style="display: flex; gap: 16px; margin-top: 16px;">
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">OpenClawHostAdapter</div>
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">HermesHostAdapter</div>
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--text-secondary);">CLIHostAdapter</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q12 -->
+      <div class="question-block" id="q12">
+        <div class="question-header">
+          <div class="question-number">Q12</div>
+          <div class="question-title">插件生命周期是如何管理的？</div>
+        </div>
+        <div class="question-content">
+          <h4>完整生命周期</h4>
+          <div class="workflow-container">
+            <div class="workflow-step">
+              <div class="workflow-number" style="background: var(--glow-teal); border-color: rgba(63, 185, 80, 0.3); color: var(--accent-teal);">1</div>
+              <div class="workflow-content">
+                <div class="workflow-title">initialize</div>
+                <div class="workflow-desc">初始化 HostAdapter → 初始化存储 → 创建核心 → 初始化 Pipeline → 恢复 checkpoint → 启动调度器</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number" style="background: var(--glow-cyan); border-color: var(--border-accent); color: var(--accent-cyan);">2</div>
+              <div class="workflow-content">
+                <div class="workflow-title">handleBeforeRecall</div>
+                <div class="workflow-desc">Agent 准备响应前 → 注入记忆（prependContext + appendSystemContext）</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number" style="background: rgba(163, 113, 247, 0.2); border-color: rgba(163, 113, 247, 0.3); color: var(--accent-purple);">3</div>
+              <div class="workflow-content">
+                <div class="workflow-title">handleTurnCommitted</div>
+                <div class="workflow-desc">对话轮次提交后 → 捕获新记忆 → 通知 Pipeline（可能触发 L1/L2/L3）</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="workflow-number" style="background: rgba(247, 120, 186, 0.2); border-color: rgba(247, 120, 186, 0.3); color: var(--accent-pink);">4</div>
+              <div class="workflow-content">
+                <div class="workflow-title">destroy</div>
+                <div class="workflow-desc">停止调度器 → 保存 checkpoint → flush pending 数据 → 关闭存储连接</div>
+              </div>
+            </div>
+          </div>
+
+          <h4>Checkpoint 机制</h4>
+          <div class="code-block">
+            <div class="code-header">
+              <span class="code-filename">pipeline-checkpoint.ts</span>
+              <div class="code-dots">
+                <span class="code-dot red"></span>
+                <span class="code-dot yellow"></span>
+                <span class="code-dot green"></span>
+              </div>
+            </div>
+            <div class="code-content">
+<pre><span class="keyword">interface</span> <span class="function">PipelineCheckpoint</span> {
+  <span class="comment">// L1 调度状态</span>
+  l1: {
+    lastExtractionTime: Date
+    pendingConversations: <span class="keyword">string</span>[]
+    currentThreshold: <span class="keyword">number</span>
+  }
+  <span class="comment">// L2 调度状态</span>
+  l2: {
+    nextScheduledTime: Date
+    scenesModifiedSinceLastRun: <span class="keyword">string</span>[]
+  }
+  <span class="comment">// L3 调度状态</span>
+  l3: {
+    lastGenerationTime: Date
+    pendingUpdate: <span class="keyword">boolean</span>
+  }
+}</pre>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" id="section-design">
+      <div class="chapter-label">设计思考</div>
+      <h2>权衡与面试准备</h2>
+
+      <!-- Q13 -->
+      <div class="question-block" id="q13">
+        <div class="question-header">
+          <div class="question-number">Q13</div>
+          <div class="question-title">复杂性与可追溯性之间如何权衡？</div>
+        </div>
+        <div class="question-content">
+          <h4>权衡矩阵</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>决策</th>
+                  <th>增加的复杂性</th>
+                  <th>获得的收益</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>四层分层</td>
+                  <td>4 层逻辑，链路追踪</td>
+                  <td>信息密度可控，精度可调</td>
+                </tr>
+                <tr>
+                  <td>JSONL append-only</td>
+                  <td>删除是软删除 + 物理延迟</td>
+                  <td>写性能高，审计完整</td>
+                </tr>
+                <tr>
+                  <td>LLM 写场景文件</td>
+                  <td>需要沙箱 + 错误处理</td>
+                  <td>场景组织更智能</td>
+                </tr>
+                <tr>
+                  <td>Checkpoint</td>
+                  <td>状态序列化/反序列化</td>
+                  <td>崩溃可恢复</td>
+                </tr>
+                <tr>
+                  <td>增量更新</td>
+                  <td>diff 算法 + 版本管理</td>
+                  <td>减少 LLM 调用</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h4>具体权衡案例</h4>
+          <div class="key-points">
+            <div class="key-point">
+              <div class="key-point-icon">A</div>
+              <div class="key-point-content">
+                <div class="key-point-title">JSONL vs 随机写入</div>
+                <div class="key-point-text"><strong>方案 B（当前）</strong>：Append-only JSONL。<strong>优点</strong>：顺序写入快，完整审计。<strong>缺点</strong>：需要定期 compaction。</div>
+              </div>
+            </div>
+            <div class="key-point">
+              <div class="key-point-icon">B</div>
+              <div class="key-point-content">
+                <div class="key-point-title">LLM 写文件的风险</div>
+                <div class="key-point-text"><strong>沙箱保护</strong>：禁止执行代码块、检测路径遍历（../、/etc）、限制文件大小。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q14 -->
+      <div class="question-block" id="q14">
+        <div class="question-header">
+          <div class="question-number">Q14</div>
+          <div class="question-title">如果让你设计一个类似的记忆系统，你会怎么做？</div>
+        </div>
+        <div class="question-content">
+          <h4>回答框架（STAR 法则）</h4>
+          <div class="callout info">
+            <div class="callout-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              STAR 法则
+            </div>
+            <div class="callout-content">
+              <strong>Situation</strong>：AI 代理的上下文管理问题<br>
+              <strong>Task</strong>：设计一个高效、可追溯的记忆系统<br>
+              <strong>Action</strong>：具体的设计决策<br>
+              <strong>Result</strong>：实际效果
+            </div>
+          </div>
+
+          <h4>参考回答</h4>
+          <div class="quote-block">
+            <p>"我会从问题分析开始。首先，AI 代理面临的核心矛盾是：上下文有限 vs 需求无限。</p>
+            <p style="margin-top: 16px;"><strong>第一层：分层抽象</strong> 不是把所有信息放在一起，而是分成多层：原始层、结构化层、场景层、画像层。这样可以实现按需加载，而不是每次都加载全部历史。</p>
+            <p style="margin-top: 16px;"><strong>第二层：符号化压缩</strong> 对于短期高频的信息，用 Mermaid 等紧凑格式替代自然语言。压缩率可以达到 90%+。</p>
+            <p style="margin-top: 16px;"><strong>第三层：智能召回</strong> 不是简单的向量检索，而是结合关键词召回、向量召回、层级召回。</p>
+            <p style="margin-top: 16px;"><strong>第四层：宿主解耦</strong> 核心逻辑与运行环境分离，通过 Adapter 模式支持多端部署。</p>
+            <p style="margin-top: 16px;"><strong>效果</strong>：在我们项目中，这个设计将 token 消耗降低了 61%，任务通过率从 33% 提升到 50%。"</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Q15 -->
+      <div class="question-block" id="q15">
+        <div class="question-header">
+          <div class="question-number">Q15</div>
+          <div class="question-title">这个系统有哪些局限性？如何改进？</div>
+        </div>
+        <div class="question-content">
+          <h4>当前局限</h4>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>局限</th>
+                  <th>影响</th>
+                  <th>可能的改进</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>L2/L3 依赖 LLM 质量</td>
+                  <td>场景聚合可能不准确</td>
+                  <td>引入人工确认机制</td>
+                </tr>
+                <tr>
+                  <td>向量检索的冷启动</td>
+                  <td>新用户没有足够数据</td>
+                  <td>结合协同过滤</td>
+                </tr>
+                <tr>
+                  <td>离线场景</td>
+                  <td>需要本地 embedding</td>
+                  <td>优化本地模型</td>
+                </tr>
+                <tr>
+                  <td>多模态支持</td>
+                  <td>只支持文本</td>
+                  <td>扩展到图片、语音</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appendix -->
+    <div class="section" id="section-appendix">
+      <div class="chapter-label">附录</div>
+      <h2>核心概念速查</h2>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>概念</th>
+              <th>解释</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="layer-badge l0" style="margin-right: 4px;">L0</span></td>
+              <td>原始对话层，完整但最占空间</td>
+            </tr>
+            <tr>
+              <td><span class="layer-badge l1" style="margin-right: 4px;">L1</span></td>
+              <td>原子记忆层，LLM 提取的关键事实</td>
+            </tr>
+            <tr>
+              <td><span class="layer-badge l2" style="margin-right: 4px;">L2</span></td>
+              <td>场景聚合层，主题化的记忆块</td>
+            </tr>
+            <tr>
+              <td><span class="layer-badge l3" style="margin-right: 4px;">L3</span></td>
+              <td>用户画像层，最抽象的总结</td>
+            </tr>
+            <tr>
+              <td><strong>Mermaid 画布</strong></td>
+              <td>用 Mermaid 语法表示任务状态</td>
+            </tr>
+            <tr>
+              <td><strong>RRF</strong></td>
+              <td>Reciprocal Rank Fusion，多策略融合</td>
+            </tr>
+            <tr>
+              <td><strong>HostAdapter</strong></td>
+              <td>宿主适配器抽象接口</td>
+            </tr>
+            <tr>
+              <td><strong>Checkpoint</strong></td>
+              <td>状态快照，用于崩溃恢复</td>
+            </tr>
+            <tr>
+              <td><strong>防抖</strong></td>
+              <td>空闲 N 秒后才触发，避免频繁调用</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-meta">
+        生成时间：2026/05/21 · 项目来源：TencentDB Agent Memory · 文档版本：v2.0（详尽版）
+      </div>
+      <div class="footer-version">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+          <path d="M2 17l10 5 10-5"/>
+          <path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span>四层记忆系统 · L0 → L1 → L2 → L3</span>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    // Smooth scroll and active nav highlighting
+    document.addEventListener('DOMContentLoaded', () => {
+      const sections = document.querySelectorAll('.section, .question-block');
+      const navItems = document.querySelectorAll('.nav-item');
+
+      // Intersection Observer for active nav highlighting
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.id;
+            navItems.forEach(item => {
+              item.classList.remove('active');
+              if (item.getAttribute('href') === '#' + id) {
+                item.classList.add('active');
+              }
+            });
+          }
+        });
+      }, {
+        rootMargin: '-20% 0px -70% 0px',
+        threshold: 0
+      });
+
+      sections.forEach(section => {
+        if (section.id) {
+          observer.observe(section);
+        }
+      });
+
+      // Smooth scroll for nav links
+      navItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+          e.preventDefault();
+          const targetId = item.getAttribute('href').substring(1);
+          const target = document.getElementById(targetId);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth' });
+          }
+        });
+      });
+
+      // Animate elements on scroll
+      const animateOnScroll = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.style.animationPlayState = 'running';
+          }
+        });
+      }, {
+        threshold: 0.1
+      });
+
+      document.querySelectorAll('.question-block').forEach((block, index) => {
+        block.style.animationDelay = `${0.1 + index * 0.05}s`;
+        animateOnScroll.observe(block);
+      });
+    });
+  </script>
 </body>
 </html>
